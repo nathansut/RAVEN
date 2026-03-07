@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -663,7 +663,7 @@ namespace RAVEN
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 if (F2ActiveType.SelectedItem?.ToString() == "RDynamic")
-                    OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
+                    Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
                 else
                     RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
                 sw.Stop();

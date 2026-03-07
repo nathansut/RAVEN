@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -514,7 +514,7 @@ namespace RAVEN
             }
             else
             {
-                textBox1.Text = @"C:\Dev\Record_0873";
+                textBox1.Text = @"C:\temp\1a";
             }
 
             var dummy = LargeResource.LargeString;
@@ -3886,7 +3886,7 @@ namespace RAVEN
                             {
                                 var sw = System.Diagnostics.Stopwatch.StartNew();
                                 if (conversionSettings?.Type == "RDynamic")
-                                    OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
+                                    Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
                                 else
                                     RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
                                 sw.Stop();
@@ -3942,12 +3942,23 @@ namespace RAVEN
 
                     }
                
+                    if (conversionSettings?.Type == "RDynamic")
+                    {
+                        // Pure C# path — write TIF directly, no RecoIP handle involved
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness);
+                        sw.Stop();
+                        StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms (RDynamic)");
+
+                        // Release the handles we opened before this block
+                        if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
+                        if (TifHandle    != 0) { RecoIP.ImgDelete(TifHandle);    TifHandle    = 0; }
+                        return; // TIF is already on disk — skip the RecoIP save pipeline
+                    }
+
                     {
                         var sw = System.Diagnostics.Stopwatch.StartNew();
-                        if (conversionSettings?.Type == "RDynamic")
-                            OpenThresholdBridge.ApplyThreshold(tImageHandle, 7, 7, contrast, brightness, inputJPG);
-                        else
-                            RecoIP.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
+                        RecoIP.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
                         sw.Stop();
                         StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
                     }
@@ -4060,7 +4071,7 @@ namespace RAVEN
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     if (conversionSettings?.Type == "RDynamic")
-                        OpenThresholdBridge.ApplyThreshold(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                        ImageHandleThrowAway = OpenThresholdBridge.ApplyThreshold(ImageHandleThrowAway, 7, 7, contrast, brightness);
                     else
                         RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
                     sw.Stop();

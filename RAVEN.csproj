@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>RAVEN</AssemblyName>
     <RootNamespace>RAVEN</RootNamespace>
@@ -42,7 +42,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <SignManifests>false</SignManifests>
-    <BaseOutputPath>\bin</BaseOutputPath>
+    <BaseOutputPath>bin</BaseOutputPath>
     <PlatformTarget>x86</PlatformTarget>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
