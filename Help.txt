@@ -1,0 +1,86 @@
+Concepts
+0 - Stand alone app (open directory with GUI), or full directory w command line (RAVEN.exe c:\temp\Book 1) or a file ("RAVEN.exe c:\temp\Book 1\0005.tif")
+
+1 - ThresholdSettings sets the default Darkness / Lightness of the shortcut keys to darken / brighten. These come with defaults. All settings ultimately come from an INI file that can be copied to people's station per job. 
+
+2 - Primary Threshold Option should be used most of the time. Pressing 5 on the keypad will convert the selected area (entire image if no area selected). 6 steps up contrast by 1, 7 by 2 & 4 decreases it by 1, 3 by 2 etc. Pushing up contrast with high despekles seems effective. 
+
+3 - Refine Threshold is an alternative setting for REALLY bad areas. It will look weird, and it loses information. It should be thought of as binarizing with extremely dark settings & then using the JPG as a despekle filter. Tolerance should be 10, Despeckle 7 - 12, contrast stepup to 5. 
+
+4 - Convert Rest of Book launches recogniform with the current settings and starts converting the rest of the book. Can continue to work while it darkens / lightens a book for you. 
+
+5 - There is some complexity going on behind the scenese to deal with photostats v non photostats. 
+
+6 - Negative = Negative Image. Show JPG = Show JPG. 
+
+Key                          | Action
+-----------------------------|-------------------------------------------------------------------
+NAVIGATION
+-----------------------------|-------------------------------------------------------------------
+Enter                        | Go / Open directory & load first image
+N or Pg Down or Space        | Next Image
+U or Pg Up or Mouse Wheel Up | Prev Image
+Home			             | Jump to start of book
+End                          | Jump to end of book
+J			                 | Jump to specific page
+A / Shift A                  | Used to move secondary highlight for rapid wheel change conversion forward or backwards
+Esc                          | Exit Application
+~                            | Toggle view JPG
+Insert                       | Insert Image Note
+-----------------------------|-------------------------------------------------------------------
+BI-TONAL MANIPULATION
+-----------------------------|-------------------------------------------------------------------
+Right Click                  | Remove Line
+Right Click (cropbox)        | Moves cropbox
+Shift + Right Click (cropbox)| Expands closest cropbox corner to mouse pointer 
+L                            | Enter/Exit Line Removal Mode (Line Removal Location Set to be removed on following images)
+R                            | Invert Area
+W                            | White Out Area
+Shift + W					 | Add Whiteout Region if Batch Whiteout (5) is turned on (has to be activated in settings.ini - BatchWhiteoutAbility = Y)
+E                            | Loads last batch whiteout region (regions are locked to even / odd page. If on an even page, will pull cordinate set from even whiteout set)
+Y                            | Deskew
+Q                            | Detects Borders, Set Cropbox Location
+Shift + Q                    | Detect Border, Set Global Cropbox Size, Set Even/Odd Cropbox Location
+X                            | Pulls up preset cropbox
+D                            | If "Whiteout Outside Box" mode is on (see '4' in MISC), pulls up the crop/whiteout box from two images prior. Otherwise, it increases the contrast of the last-used threshold by 1. 
+S                            | If "Whiteout Outside Box" mode is on (see '4' in MISC), pulls up the crop/whiteout box from the previous image. Otherwise, it decreases the contrast of the last-used threshold by 1
+Shift + X (After selecting   | Sets Crop Box (Global Size & Even/Odd Cropbox Location)
+box)                         |
+C                            | Crop (Selected area, visible cropbox location or whiteout outside if crop mode set to whiteout
+4                            | Toggles on/off crop mode to be whiteout outside box selection (using C - works with preset boxes)
+F                            | Flip/Rotate (Both JPG & TIF by 90 degrees)
+Z                            | Undo
+Shift + Z                    | Redo
+Mouse Scroll Wheel           | Fine Rotate (if in fine rotate mode) / Rapidly change value of yellow highlighed box & reconvert image
+-----------------------------|-------------------------------------------------------------------
+SELECTION
+-----------------------------|-------------------------------------------------------------------
+Draw box w Right Mouse       | Select Area to modify
+Draw box w Left Mouse        | Zoom Area
+-----------------------------|-------------------------------------------------------------------
+THRESHOLD
+-----------------------------|-------------------------------------------------------------------
+Mouse Scroll Wheel           | Fine Rotate (if in fine rotate mode) / Rapidly change value of yellow highlighed box & reconvert image
+F1                           | Load help
+F2                           | F2 Threshold Settings
+F3                           | F3 Threshold Settings
+F4                           | F4 Threshold Settings
+F5                           | F4 Threshold Settings
+F6                           | F4 Threshold Settings
+D                            | +1 Prev Threshold Contrast / Alternate behavior if in whiteout mode - pulls up prev image crop/whiteout box
+S                            | -1 Prev Threshold Contrast / Alternate behavior if in whiteout mode - pulls up two images ago crop/whiteout box (every other image)
+-----------------------------|-------------------------------------------------------------------
+EXTERNAL                      .ps1 scripts can be customized to do anything w access to current full image name, current image directory & current running path directory.
+-----------------------------|-------------------------------------------------------------------
+2                            | Runs 2.ps1 to open Irfanview
+3                            | Runs 3.ps1 to open Phreview
+-----------------------------|-------------------------------------------------------------------
+MISC                       
+-----------------------------|-------------------------------------------------------------------
+Shift + Insert               | Inserts/deletes blank page (inserts after current page, deletes blank if currently looking at blank page)
+[                            | Bulk Enhance Mode (Every Image, Every Other Image, Off) - Press to cycle between these options. Select multiple areas and press F2, F3, F4 to add a rectangle w conversion setting from that hot key. When done press ]
+]                            | Bulk Enhance Mode Start
+1                            | Switches between Fine Rotate Mode & Rapid Change Value of yellow highlighted conversion value & reconvert image mode
+4                            | Toggles "Whiteout Outside Box" mode. When on, the C (Crop) key will white-out the area outside the selection, and the D and S keys will recall previous whiteout boxes instead of adjusting contrast.
+5                            | Turns on Batch Whiteout Mode (Requires BatchWhiteoutAbility = Y in ini. Use Shift + W to add a box to your whiteout group, keeps track of different lists for even / odd pages, press E to show all saved whiteout areas to screen, W to white them out)
+6                            | Toggles Draw Line Mode on/off. When on, Right-Clicking sets a horizontal line position on the image. This position is remembered for subsequent even/odd pages. (Used for setting margins on pages / can be used to export print re-use margin on PDF files)

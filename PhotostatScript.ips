@@ -1,0 +1,113 @@
+//----Deskpeckle on Photostats-----//
+DespecklePhotostat := True;
+
+                                       
+//----- Option for croping overscan on non-photostats (typically set to true):
+CropOverscan := True;
+
+
+//------Page Parts-----//
+//A is the over scan                      
+//B is the page border outside the photostat      
+//C is photostat 
+//D is recording strip
+
+                                   
+CopyOfImage := ImgDuplicate(_CurrentImage);     
+ImgAdaptiveThresholdAverage( CopyOfImage, 7, 7, -1, -1 );  
+
+aLeft:=ImgFindBlackBorderLeft( CopyOfImage, 90.0, 1 );
+aTop:=ImgFindBlackBorderTop( CopyOfImage, 90.0, 1 );
+aRight:=ImgFindBlackBorderRight( CopyOfImage, 90.0, 1 );
+aBottom:=ImgFindBlackBorderBottom( CopyOfImage, 90.0, 1 );
+
+if (aLeft<=aRight) and (aTop<=aBottom) then Begin
+ ImgCropBorder( CopyOfImage, aLeft, aTop, aRight, aBottom );
+End;
+
+//Copy of image has black interior photostat bitonal - we wil invert this.
+ImgInvert(CopyOfImage);
+    
+//Now we'll find the blackborder which is the scan border - we'll crop it off. 
+bLeft:=ImgFindBlackBorderLeft( CopyOfImage, 99.0, 1 );
+bTop:=ImgFindBlackBorderTop( CopyOfImage, 99.0, 1 );
+bRight:=ImgFindBlackBorderRight( CopyOfImage, 99.0, 1 );
+bBottom:=ImgFindBlackBorderBottom( CopyOfImage, 99.0, 1 );
+    
+bLeft:=bLeft+20;
+bRight:=bRight-20;
+
+if (bLeft<=bRight) and (bTop<=bBottom) then Begin
+ ImgCropBorder( CopyOfImage, bLeft, bTop, bRight, bBottom );
+End; 
+    
+//I think one of these finds the photostat AFTER overscan has been removed - then somewhere else removes borders so stiching back in kinda works out.           
+
+cLeft:=ImgFindBlackBorderLeft( CopyOfImage, 80.0, 30 );       
+cTop:=ImgFindBlackBorderTop( CopyOfImage, 80.0, 100 );
+cRight:=ImgFindBlackBorderRight( CopyOfImage, 80.0, 30 );
+cBottom:=ImgFindBlackBorderBottom( CopyOfImage, 80.0, 100 );
+
+cLeft := cLeft +20;
+cRight := cRight -20;
+cTop := cTop +20;                                                                                           
+cBottom := cBottom -20; 
+
+
+ImgDelete( CopyOfImage);
+
+ImgRemoveBleedThrough(_currentImage,1);
+    
+//Make a copy of the _currentImage for use here - we will put it back in 
+    
+if (aLeft<=aRight) and (aTop<=aBottom) then Begin
+ Copy1 := ImgCopy(_currentImage,aLeft, aTop, aRight, aBottom );
+End;
+
+//Remove any border of the paper itself that is clean
+if (bLeft<=bRight) and (bTop<=bBottom) then Begin
+ Copy2 := ImgCopy(Copy1, bLeft, bTop, bRight, bBottom );
+End;
+
+ApplicationLog('Threshold real image ...');
+Photostat := ImgCopy(Copy2,cLeft,cTop,cRight,cBottom);
+
+
+//Turn the photostat white for better processing
+ImgInvert(Photostat);          
+                                        
+ApplicationLog( 'Image Thresholding...' );
+
+//************************************************************************
+//         Thresholding for photostat                                    *
+//************************************************************************
+
+//NOTE Threshold for photostat - ******To make cleaner decrease third number 
+ImgDynamicThresholdAverage( Photostat, 7, 7, 249, 215 );
+    
+if (DespecklePhotostat) Then Begin
+ ImgDespeckle( Photostat, 3, 3 );  
+end;
+    
+ImgRemoveBlackWires(Photostat);
+      
+PhHeight := ImgGetHeight(Photostat)-10;
+PhRatio := PhHeight/5;     
+PhBreaks := PhHeight-15000;
+ImgRemoveVerticalLines(Photostat,PhHeight,PhBreaks,PhRatio,False,True);
+
+
+ImgAdaptiveThresholdAverage( _CurrentImage, 7, 7, -1, -1 );  
+ImgAdaptiveThresholdAverage( Copy1, 7, 7, 40, 230 );
+ImgAdaptiveThresholdAverage( Copy2, 7, 7, 40, 230 );
+    
+ApplicationLog('Putting Photostat back in ...');
+ImgAddCopy(Copy2,Photostat,cLeft,cTop);
+ImgAddCopy(Copy1,Copy2,bLeft, bTop);
+ImgAddCopy(_currentImage,Copy1, aLeft,aTop);
+
+//Delete the copies
+ImgDelete(Photostat);
+ImgDelete(Copy2);
+ImgDelete(Copy1);
+                                  

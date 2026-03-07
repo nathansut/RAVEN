@@ -1,0 +1,11 @@
+ImgDynamicThresholdAverage( _CurrentImage, 7, 7, 249, 215 );
+
+
+// PhHeight := ImgGetHeight(_CurrentImage)-300;
+// PhRatio := PhHeight/6;
+// PhBreaks := PhHeight-12000;
+// ImgRemoveVerticalLines(_CurrentImage,PhHeight,PhBreaks,PhRatio,False,True);   
+
+// ImgRemoveBlackWires(_CurrentImage);                
+
+ImgDespeckle( _CurrentImage, 3,3);                                      

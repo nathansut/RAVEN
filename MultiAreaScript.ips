@@ -1,0 +1,76 @@
+// Click on right mouse button to add common image processing functions
+//This variable gets replaced w output generated from RAVEN
+//Format of this file is 
+//Image,X,Y,X2,Y2,Contrast,Brightness,Despekle,Negative
+//C:\Temp\RecogTest\0003.jpg,300,300,600,600,200,10,10,1
+FileString:='C:\bin\Debug\net6.0-windows\MultiEditList.txt';                
+
+FileHandle := TextFileOpen(FileString, false);
+
+if FileHandle <> 0 then
+begin                             
+  while not TextFileEOF(FileHandle) do                     
+    begin                           
+        // Read a line from the file
+        Line := TextFileReadLn(FileHandle);   
+        // Process the line (you can split it or manipulate it as needed)
+        // ApplicationLog(Line); // Log or process each line
+        TextFileJPG:=UpperCase(Split(Line, ',',0));
+        InputFileJPG:=UpperCase(_CurrentInputFile);
+        // ApplicationLog(TextFileJPG); 
+        // ApplicationLog(InputFileJPG);
+                             
+    // If InputFile Matches Text File file name then we cut out that area of the image
+    // And we threshold it (where do we store the threshold values???)
+        if TextFileJPG = InputFileJPG then
+        begin   
+            tX1:=StrToInt(Split(Line, ',',1));
+            tY1:=StrToInt(Split(Line, ',',2));
+            tX2:=StrToInt(Split(Line, ',',3));
+            tY2:=StrToInt(Split(Line, ',',4));     
+            tContrast:=StrToInt(Split(Line, ',',5));
+            tBrightness:=StrToInt(Split(Line, ',',6));
+            tDespeckle:=StrToInt(Split(Line, ',',7));
+            tNegative:=StrToInt(Split(Line, ',',8));
+                                                
+            //Copy specified rectangle                       
+            JPGImgRect:=ImgCopy(_CurrentImage,tX1, tY1, tX2, tY2);
+            
+            //Is this a negative image? 
+            if tNegative=1 then
+            begin
+              ImgInvert(JPGImgRect);              
+            end;                                                                         
+            ImgDynamicThresholdAverage(JPGImgRect, 7, 7, tContrast, tBrightness); 
+                                                    
+            //Despekle
+            if tDespeckle>0 then      
+            begin
+                ImgDespeckle(JPGImgRect, tDespeckle, tDespeckle);                                            
+            end;
+                                                                                                                  
+            // Open TIF file
+            InputFileTIF:=InputFileJPG;            
+            Substitute(InputFileTIF, '.JPG', '.TIF');
+                                         
+            // ApplicationLog(InputFileTIF);          
+                                                                        
+                                                                          
+            InputFileTIFHandle:=ImgOpen(InputFileTIF, 0);
+                                                                                                                                                  
+            // Copy Thresholded JPG to TIF file
+            ImgAddCopy(InputFileTIFHandle, JPGImgRect, tX1, tY1); 
+            DeleteFile(InputFileTIF); 
+                                             
+            ImgSaveAsTif(InputFileTIFHandle, InputFileTIF, 5, 0, 'Sutterfield Technologies');  
+            
+            ImgDelete(InputFileTIFHandle);               
+            ImgDelete(JPGImgRect);                                    
+        end;
+        
+    end;                    
+  TextFileClose(FileHandle);  
+end;                           
+                                                 
+                                                                        
+                                                                          
