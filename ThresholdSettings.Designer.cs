@@ -222,7 +222,7 @@
             // F2ActiveType
             // 
             F2ActiveType.FormattingEnabled = true;
-            F2ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
+            F2ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
             F2ActiveType.Location = new System.Drawing.Point(1, 22);
             F2ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F2ActiveType.Name = "F2ActiveType";
@@ -382,7 +382,7 @@
             // F3ActiveType
             // 
             F3ActiveType.FormattingEnabled = true;
-            F3ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
+            F3ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
             F3ActiveType.Location = new System.Drawing.Point(1, 22);
             F3ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F3ActiveType.Name = "F3ActiveType";
@@ -567,7 +567,7 @@
             // F4ActiveType
             // 
             F4ActiveType.FormattingEnabled = true;
-            F4ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
+            F4ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
             F4ActiveType.Location = new System.Drawing.Point(0, 22);
             F4ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F4ActiveType.Name = "F4ActiveType";
@@ -783,7 +783,7 @@
             // F5ActiveType
             // 
             F5ActiveType.FormattingEnabled = true;
-            F5ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
+            F5ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
             F5ActiveType.Location = new System.Drawing.Point(1, 22);
             F5ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F5ActiveType.Name = "F5ActiveType";
@@ -968,7 +968,7 @@
             // F6ActiveType
             // 
             F6ActiveType.FormattingEnabled = true;
-            F6ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
+            F6ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
             F6ActiveType.Location = new System.Drawing.Point(1, 22);
             F6ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F6ActiveType.Name = "F6ActiveType";

@@ -1409,7 +1409,7 @@ namespace RAVEN
 
             //Was [ key pressed (initialize) & initialize not already set?
 
-            bool IsDynamicOrML(string type) => type == "Dynamic" || type == "ML1" || type == "ML2";
+            bool IsDynamicOrML(string type) => type == "Dynamic" || type == "RDynamic" || type == "ML1" || type == "ML2";
 
             if (pressedKey == Keys.OemOpenBrackets)
             {
@@ -1486,7 +1486,7 @@ namespace RAVEN
                     {
                         hasSBB = true;
                     }
-                    if (type == "Dynamic")
+                    if (type == "Dynamic" || type == "RDynamic")
                     {
                         hasDynamic = true;
                     }
@@ -1714,9 +1714,9 @@ namespace RAVEN
                     var _TempSettings = GetSettingsForKey(pressedKey);
                     if (_TempSettings == null) return;
 
-                    if (_TempSettings.Type != "Dynamic")
+                    if (_TempSettings.Type != "Dynamic" && _TempSettings.Type != "RDynamic")
                     {
-                        MessageBox.Show("Only Dynamic Threshold is supported.");
+                        MessageBox.Show("Only Dynamic/Open Threshold is supported.");
                         return;
                     }
                     vMultipageModifyList.Add(Tuple.Create(_left, _top, _right, _bottom, _TempSettings));
@@ -2955,13 +2955,13 @@ namespace RAVEN
                     int tolerance = 0;
                     bool negative = false;
 
-                    if (_ConversionSettings.Type == "Dynamic")
+                    if (_ConversionSettings.Type == "Dynamic" || _ConversionSettings.Type == "RDynamic")
                     {
                         refinethreshold = false;
-                        contrast = _ConversionSettings.Contrast; 
+                        contrast = _ConversionSettings.Contrast;
                         brightness = _ConversionSettings.Brightness;
                         despeckle = _ConversionSettings.Despeckle;
-                        negative = _ConversionSettings.NegativeImage; 
+                        negative = _ConversionSettings.NegativeImage;
                     }
                     else if (_ConversionSettings.Type == "Refine")
                     {
@@ -3884,7 +3884,13 @@ namespace RAVEN
                             }
                             else
                             {
-                                RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+                                var sw = System.Diagnostics.Stopwatch.StartNew();
+                                if (conversionSettings?.Type == "RDynamic")
+                                    OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
+                                else
+                                    RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+                                sw.Stop();
+                                StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
                             }
 
                             if (despeckle > 0 && RefineThreshold == false)
@@ -3936,7 +3942,15 @@ namespace RAVEN
 
                     }
                
-                    RecoIP.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
+                    {
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        if (conversionSettings?.Type == "RDynamic")
+                            OpenThresholdBridge.ApplyThreshold(tImageHandle, 7, 7, contrast, brightness, inputJPG);
+                        else
+                            RecoIP.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
+                        sw.Stop();
+                        StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
+                    }
 
                     if (RefineThreshold == true)
                     {
@@ -4043,7 +4057,15 @@ namespace RAVEN
                 int ImageHandleThrowAway = 0;
 
                 ImageHandleThrowAway = RecoIP.ImgDuplicate(ImageHandlePartial);
-                RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    if (conversionSettings?.Type == "RDynamic")
+                        OpenThresholdBridge.ApplyThreshold(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                    else
+                        RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                    sw.Stop();
+                    StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
+                }
 
                 // Refine threshold cont
                 if (RefineThreshold == true)
@@ -4308,13 +4330,28 @@ namespace RAVEN
             if (this.CachedJPG > 0)
             {
                 RecoIP.ImgDelete(CachedJPG);
-                this.CachedJPG = 0; 
+                this.CachedJPG = 0;
             }
             if (this.CachedPartialImageHandle > 0)
             {
                 RecoIP.ImgDelete(CachedPartialImageHandle);
                 this.CachedPartialImageHandle = 0; // Reset the handle
                 this.CachedPartialImageDimensions = (0, 0, 0, 0);
+            }
+            OpenThresholdBridge.ClearCache();
+        }
+
+        // Preload current image's JPEG into grayscale bytes in the background
+        // so RDynamic threshold doesn't have to wait for the disk read.
+        private void PreloadForOpenThreshold()
+        {
+            if (currentImageIndex >= 0 && currentImageIndex < ImagePairs.Count)
+            {
+                string jpg = ImagePairs[currentImageIndex].JPG;
+                if (!string.IsNullOrEmpty(jpg) && File.Exists(jpg))
+                {
+                    Task.Run(() => OpenThresholdBridge.PreloadGrayscale(jpg));
+                }
             }
         }
 
@@ -4390,6 +4427,7 @@ namespace RAVEN
                 currentImageIndex = jumpto;
                 var nextImagePair = ImagePairs[currentImageIndex];
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
+                PreloadForOpenThreshold();
             }
 
             if (Special_DrawLineMode)
@@ -4423,6 +4461,7 @@ namespace RAVEN
                 // Load and display the previous image pair
                 var prevImagePair = ImagePairs[currentImageIndex];
                 DisplayImages(prevImagePair.JPG, prevImagePair.TIF);
+                PreloadForOpenThreshold();
             }
             else
             {
@@ -4480,13 +4519,14 @@ namespace RAVEN
                     AutoRemoveLines(nextImagePair.TIF);
                 }
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
+                PreloadForOpenThreshold();
             }
             else
             {
                 MessageBox.Show("No images to display.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
-            
+
             if (Special_DrawLineMode)
             {
                 UpdateLinePositionFromTag();

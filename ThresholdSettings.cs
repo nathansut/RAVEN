@@ -660,7 +660,15 @@ namespace RAVEN
 
             RecoIP.ImgInvert(Photostat);
 
-            RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                if (F2ActiveType.SelectedItem?.ToString() == "RDynamic")
+                    OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
+                else
+                    RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+                sw.Stop();
+                AddStatusUpdate($"Threshold: {sw.ElapsedMilliseconds}ms ({F2ActiveType.SelectedItem})");
+            }
 
             if (Despeckle == true)
             {
