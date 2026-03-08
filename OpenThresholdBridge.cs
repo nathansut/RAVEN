@@ -123,9 +123,13 @@ public static class OpenThresholdBridge
     }
 
     /// <summary>Call when navigating away from an image to free the cached bytes.</summary>
+    /// <remarks>
+    /// Does NOT block on pending save — the save task holds its own byte[] reference,
+    /// so clearing the cache pointer is safe. This keeps navigation instant even if
+    /// the previous image's TIF save is still writing to disk.
+    /// </remarks>
     public static void ClearCache()
     {
-        WaitForPendingSave(); // ensure current image is saved before clearing
         lock (_cacheLock)  { _cachedGray = null; _cachedGrayAvg = null; _cachedPath = null; }
         lock (_tifLock)    { _cachedTif = null; _cachedTifPath = null; }
     }

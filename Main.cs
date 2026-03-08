@@ -3791,9 +3791,12 @@ namespace RAVEN
         // Threshold my actual JPG -> Output to TIF I SURE WISH I COULD USE LICENSED SOFTWARE
         public void threshold(string inputJPG, int contrast, int brightness, int X1, int Y1, int X2, int Y2, bool NegativeImage = false, bool RefineThreshold = false, int despeckle = 0, int refinetolerance = 10, bool ForceClearCache = false, bool SBB = false, ConversionSettings conversionSettings = null)
         {
+            // Cancel background image prefetch to free CPU cores for thresholding
+            RavenPictureBox.CancelAllPrefetch();
+
             if (ForceClearCache == true)
             {
-                ClearJPGCache(); 
+                ClearJPGCache();
             }
 
             inputJPG = inputJPG.ToLower();
@@ -4433,6 +4436,42 @@ namespace RAVEN
             }
         }
 
+        /// <summary>
+        /// Pre-decode adjacent images (±3) on background threads so paging feels instant.
+        /// Called after DisplayImages — current image is already shown, this starts background work.
+        /// </summary>
+        private void PrefetchAdjacentImages()
+        {
+            if (!ImagePairs.Any()) return;
+
+            var keepPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var toPrefetch = new List<string>();
+
+            for (int offset = -3; offset <= 3; offset++)
+            {
+                if (offset == 0) continue; // current image already displayed
+                int idx = currentImageIndex + offset;
+                if (idx < 0 || idx >= ImagePairs.Count) continue;
+
+                var pair = ImagePairs[idx];
+                if (isJPGVisible && !string.IsNullOrEmpty(pair.JPG) && File.Exists(pair.JPG))
+                {
+                    keepPaths.Add(pair.JPG);
+                    toPrefetch.Add(pair.JPG);
+                }
+                if (!string.IsNullOrEmpty(pair.TIF) && File.Exists(pair.TIF))
+                {
+                    keepPaths.Add(pair.TIF);
+                    toPrefetch.Add(pair.TIF);
+                }
+            }
+
+            // Cancel stale prefetches, keep entries still in the ±3 window
+            RavenPictureBox.RefreshPrefetch(keepPaths);
+            // Start new prefetches for uncached adjacent images
+            RavenPictureBox.PrefetchImages(toPrefetch);
+        }
+
         private void UpdateLinePositionFromTag()
         {
             if (Special_DrawLineMode && currentImageIndex >= 0 && currentImageIndex < ImagePairs.Count)
@@ -4504,9 +4543,10 @@ namespace RAVEN
                 ClearJPGCache(clearGrayscaleCache: true);
                 currentImageIndex = jumpto;
                 var nextImagePair = ImagePairs[currentImageIndex];
+                PreloadForOpenThreshold();
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
                 keyPicture2.ShowFileOk();
-                PreloadForOpenThreshold();
+                PrefetchAdjacentImages();
             }
 
             if (Special_DrawLineMode)
@@ -4539,9 +4579,10 @@ namespace RAVEN
                 }
                 // Load and display the previous image pair
                 var prevImagePair = ImagePairs[currentImageIndex];
+                PreloadForOpenThreshold();
                 DisplayImages(prevImagePair.JPG, prevImagePair.TIF);
                 keyPicture2.ShowFileOk();
-                PreloadForOpenThreshold();
+                PrefetchAdjacentImages();
             }
             else
             {
@@ -4593,14 +4634,17 @@ namespace RAVEN
 
                 // Load and display the next image pair
                 var nextImagePair = ImagePairs[currentImageIndex];
-                // Do auto line removal process 
+                // Do auto line removal process
                 if (LineRemovalList.Count > 0)
                 {
                     AutoRemoveLines(nextImagePair.TIF);
                 }
+                // Start grayscale preload BEFORE display so OpenCV decode runs
+                // in parallel with WIC decode + D2D render on the UI thread.
+                PreloadForOpenThreshold();
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
                 keyPicture2.ShowFileOk();
-                PreloadForOpenThreshold();
+                PrefetchAdjacentImages();
             }
             else
             {
