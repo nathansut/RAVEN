@@ -39,62 +39,37 @@ public static class DynamicThreshold
             ? new ParallelOptions { MaxDegreeOfParallelism = maxParallelism }
             : new ParallelOptions();
 
-        // Process in horizontal strips to avoid a single full-image long[] integral.
-        // A full integral for a 19MP image costs ~152 MB as long[] in a 32-bit process,
-        // which routinely triggers OutOfMemoryException. Each strip uses ~20 MB instead.
-        int stripRows = Math.Max(hh * 2 + 1, 512);
+        // Single full-image integral — 64-bit process has plenty of memory (~150 MB for 19MP).
+        // Eliminates strip overlap recomputation and per-strip allocation overhead.
+        long[] integral = ComputeIntegral(gray, width, height);
+        int iw = width + 1;
 
-        int stripStart = 0;
-        while (stripStart < height)
+        Parallel.For(0, height, options, gy =>
         {
-            int stripEnd = Math.Min(stripStart + stripRows, height);
-
-            // Overlap by hh rows above and below so window lookups at strip edges are correct.
-            int srcY1   = Math.Max(0, stripStart - hh);
-            int srcY2   = Math.Min(height - 1, stripEnd - 1 + hh);
-            int srcRows = srcY2 - srcY1 + 1;
-
-            long[] integral = ComputeIntegralStrip(gray, width, srcY1, srcRows);
-
-            int capturedStart = stripStart;
-            int capturedEnd   = stripEnd;
-            int capturedSrcY1 = srcY1;
-
-            Parallel.For(capturedStart, capturedEnd, options, gy =>
+            for (int x = 0; x < width; x++)
             {
-                int iw = width + 1;
-                for (int x = 0; x < width; x++)
-                {
-                    // Clamped window bounds in global coordinates
-                    int y1 = Math.Max(0,          gy - hh);
-                    int y2 = Math.Min(height - 1, gy + hh);
-                    int x1 = Math.Max(0,           x - hw);
-                    int x2 = Math.Min(width  - 1,  x + hw);
+                int y1 = Math.Max(0,          gy - hh);
+                int y2 = Math.Min(height - 1, gy + hh);
+                int x1 = Math.Max(0,           x - hw);
+                int x2 = Math.Min(width  - 1,  x + hw);
 
-                    // Translate to strip-local row indices
-                    int ly1 = y1 - capturedSrcY1;
-                    int ly2 = y2 - capturedSrcY1;
+                long sum = integral[(y2 + 1) * iw + (x2 + 1)]
+                         - integral[y1        * iw + (x2 + 1)]
+                         - integral[(y2 + 1)  * iw + x1]
+                         + integral[y1        * iw + x1];
 
-                    long sum = integral[(ly2 + 1) * iw + (x2 + 1)]
-                             - integral[ly1        * iw + (x2 + 1)]
-                             - integral[(ly2 + 1)  * iw + x1]
-                             + integral[ly1        * iw + x1];
+                int count = (y2 - y1 + 1) * (x2 - x1 + 1);
+                int mean  = (int)((sum + count / 2) / count);
 
-                    int count = (y2 - y1 + 1) * (x2 - x1 + 1);
-                    int mean  = (int)((sum + count / 2) / count);
+                int pixel   = gray[gy * width + x];
+                int absDiff = Math.Abs(mean - pixel);
 
-                    int pixel   = gray[gy * width + x];
-                    int absDiff = Math.Abs(mean - pixel);
-
-                    if (absDiff > effContrast)
-                        result[gy * width + x] = (byte)(pixel >= mean ? 255 : 0);
-                    else
-                        result[gy * width + x] = (byte)(pixel > effThreshold ? 255 : 0);
-                }
-            });
-
-            stripStart = stripEnd;
-        }
+                if (absDiff > effContrast)
+                    result[gy * width + x] = (byte)(pixel >= mean ? 255 : 0);
+                else
+                    result[gy * width + x] = (byte)(pixel > effThreshold ? 255 : 0);
+            }
+        });
 
         return result;
     }

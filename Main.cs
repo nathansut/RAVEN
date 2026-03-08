@@ -362,6 +362,7 @@ namespace RAVEN
 
 
         private string actionStatus, selectionStatus, modeStatus, autolineStatus;
+        private string _lastThresholdDetail;
 
         //Initialize Jump to Index
         public int InitialJumpToIndex = 0; 
@@ -604,6 +605,23 @@ namespace RAVEN
 
             // Checks INI
             LoadINISettings();
+
+            // Wire up background save callback — updates title bar + green checkmark when save completes
+            OpenThresholdBridge.OnSaveCompleted = (writeMs) =>
+            {
+                if (InvokeRequired)
+                    BeginInvoke(() => OnBackgroundSaveCompleted(writeMs));
+                else
+                    OnBackgroundSaveCompleted(writeMs);
+            };
+        }
+
+        private void OnBackgroundSaveCompleted(long writeMs)
+        {
+            // Update title bar: replace "save:bg" with actual save time
+            if (this.Text.Contains("save:bg"))
+                this.Text = this.Text.Replace("save:bg", $"save:{writeMs}");
+            keyPicture2.ShowSaved();
         }
 
         private void Form1_MouseWheel(object sender, MouseEventArgs e)
@@ -2997,25 +3015,37 @@ namespace RAVEN
                         {
                             DisplayImages(jpgImage, jpgImage.ToLower().Replace(".jpg", ".tif"), 0, true);
                         }
+                        else if (OpenThresholdBridge.TryGetDisplayPixels(out byte[] tifPixels, out int tifW, out int tifH))
+                        {
+                            // Display from cached pixels — skip disk read + Group 4 decode
+                            keyPicture2.LoadFromGrayscalePixels(tifPixels, tifW, tifH);
+                            if (OpenThresholdBridge.IsSaveInProgress)
+                                keyPicture2.ShowSaving();
+                        }
                         else
                         {
+                            // Fallback to disk reload
                             DisplayImages(string.Empty, jpgImage.ToLower().Replace(".jpg", ".tif"), 2, true);
+                            keyPicture2.ShowFileOk();
                         }
 
-                        // Re-select 
+                        // Re-select
                         if (_right > 0 && _bottom > 0)
                         {
                             keyPicture2.SetSelectedImageArea(_left, _top, _right, _bottom);
                         }
                     }
 
+                    string timePart = _lastThresholdDetail != null ? $" | {_lastThresholdDetail}" : "";
+                    _lastThresholdDetail = null;
+
                     if (refinethreshold == true)
                     {
-                        actionStatus = "Refine: C" + contrast.ToString() + " B" + brightness.ToString() + " D" + despeckle.ToString() + " T" + tolerance.ToString();
+                        actionStatus = $"Refine: C{contrast} B{brightness} D{despeckle} T{tolerance}{timePart}";
                     }
                     else
                     {
-                        actionStatus = "Dynamic: C" + contrast.ToString() + " B" + brightness.ToString() + " D" + despeckle.ToString();
+                        actionStatus = $"{_ConversionSettings?.Type ?? "Dynamic"}: C{contrast} B{brightness} D{despeckle}{timePart}";
                     }
                     StatusUpdate();
                 }
@@ -3818,6 +3848,20 @@ namespace RAVEN
                 if (NegativeImage == true && SBB == false)
                 {
                     StatusUpdate("Photostat Threshold - please wait ... ");
+
+                    // Pure C# path — invert, threshold, save TIF directly (RDynamic + Refine)
+                    if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
+                    {
+                        OpenThresholdBridge.ApplyThresholdToFileNegative(inputJPG, outputTIF, 7, 7, contrast, brightness,
+                            RefineThreshold, refinetolerance);
+                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
+                        if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
+                        if (TifHandle    != 0) { RecoIP.ImgDelete(TifHandle);    TifHandle    = 0; }
+                        return;
+                    }
+
                     int CopyOfImage = RecoIP.ImgDuplicate(tImageHandle);
                     
                     RecoIP.ImgAutoThreshold(CopyOfImage, 2);
@@ -3942,18 +3986,19 @@ namespace RAVEN
 
                     }
                
-                    if (conversionSettings?.Type == "RDynamic")
+                    if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
                     {
-                        // Pure C# path — write TIF directly, no RecoIP handle involved
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
-                        OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness);
-                        sw.Stop();
-                        StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms (RDynamic)");
+                        // Pure C# path — threshold in foreground, save in background
+                        OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness,
+                            RefineThreshold, refinetolerance);
+                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
 
                         // Release the handles we opened before this block
                         if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
                         if (TifHandle    != 0) { RecoIP.ImgDelete(TifHandle);    TifHandle    = 0; }
-                        return; // TIF is already on disk — skip the RecoIP save pipeline
+                        return; // TIF saving in background — display from memory in ThresholdMe
                     }
 
                     {
@@ -4019,10 +4064,34 @@ namespace RAVEN
                 }
                 // Create Checkpoin
                 CreateCheckpoint(outputTIF);
-                int ImageHandlePartial = 0; 
+
+                // Pure C# partial path — read JPG, crop, threshold, write TIF directly (RDynamic + Refine)
+                if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
+                {
+                    if (NegativeImage)
+                        OpenThresholdBridge.ApplyThresholdToFilePartialNegative(inputJPG, outputTIF,
+                            X1, Y1, X2, Y2, 7, 7, contrast, brightness,
+                            RefineThreshold, refinetolerance);
+                    else
+                        OpenThresholdBridge.ApplyThresholdToFilePartial(inputJPG, outputTIF,
+                            X1, Y1, X2, Y2, 7, 7, contrast, brightness,
+                            RefineThreshold, refinetolerance);
+                    {
+                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
+                    }
+
+                    if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
+                    if (TifHandle != 0) { RecoIP.ImgDelete(TifHandle); TifHandle = 0; }
+                    return; // TIF saving in background — display from memory in ThresholdMe
+                }
+
+                // Non-RDynamic partial: existing RecoIP handle pipeline
+                int ImageHandlePartial = 0;
 
                 var currentPartialDims = (X1, Y1, X2, Y2);
-                
+
                 //CachedJPG == 0 || ForceClearCache == true
 
                 if (CachedPartialImageHandle != 0 && this.CachedPartialImageDimensions == currentPartialDims && ForceClearCache == false)
@@ -4034,7 +4103,7 @@ namespace RAVEN
                     if (CachedPartialImageHandle != 0)
                     {
                         RecoIP.ImgDelete(CachedPartialImageHandle);
-                        CachedPartialImageHandle = 0; 
+                        CachedPartialImageHandle = 0;
                     }
 
                     ImageHandlePartial = RecoIP.ImgCopy(ImageHandle, X1, Y1, X2, Y2);
@@ -4049,15 +4118,15 @@ namespace RAVEN
                     }
                 }
 
-                // If it's color we'll convert to greyscale 
+                // If it's color we'll convert to greyscale
 
                 // Refine threshold is set - we need to copy / then convert / preserve the greyscale for the filter.
                 if (RefineThreshold == true)
                 {
                     GreyscaleForRefine = RecoIP.ImgDuplicate(ImageHandlePartial);
-                    
+
                     int nBits = RecoIP.ImgGetBitsPixel(GreyscaleForRefine);
-                    // If color image, convert to greyscale. 24 = color, 8 = greyscale. 
+                    // If color image, convert to greyscale. 24 = color, 8 = greyscale.
                     if (nBits == 24)
                     {
                         RecoIP.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
@@ -4070,10 +4139,7 @@ namespace RAVEN
                 ImageHandleThrowAway = RecoIP.ImgDuplicate(ImageHandlePartial);
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
-                    if (conversionSettings?.Type == "RDynamic")
-                        ImageHandleThrowAway = OpenThresholdBridge.ApplyThreshold(ImageHandleThrowAway, 7, 7, contrast, brightness);
-                    else
-                        RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                    RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
                     sw.Stop();
                     StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
                 }
@@ -4081,7 +4147,7 @@ namespace RAVEN
                 // Refine threshold cont
                 if (RefineThreshold == true)
                 {
-                    // 10 seems to be the sweet spot for not losing data and pulling stuff out. It will be noisy but can be combined with a Despekle to get good results. 
+                    // 10 seems to be the sweet spot for not losing data and pulling stuff out. It will be noisy but can be combined with a Despekle to get good results.
                     RecoIP.ImgRefineThreshold(ImageHandleThrowAway, GreyscaleForRefine, refinetolerance);
                     RecoIP.ImgDelete(GreyscaleForRefine);
                 }
@@ -4336,7 +4402,7 @@ namespace RAVEN
             F6Settings.WriteINI("F6");
         }
 
-        public void ClearJPGCache()
+        public void ClearJPGCache(bool clearGrayscaleCache = false)
         {
             if (this.CachedJPG > 0)
             {
@@ -4349,7 +4415,8 @@ namespace RAVEN
                 this.CachedPartialImageHandle = 0; // Reset the handle
                 this.CachedPartialImageDimensions = (0, 0, 0, 0);
             }
-            OpenThresholdBridge.ClearCache();
+            if (clearGrayscaleCache)
+                OpenThresholdBridge.ClearCache();
         }
 
         // Preload current image's JPEG into grayscale bytes in the background
@@ -4434,10 +4501,11 @@ namespace RAVEN
             SaveCurrentPageSettings(); 
             if (jumpto <= (ImagePairs.Count) && jumpto >= 0)
             {
-                ClearJPGCache();
+                ClearJPGCache(clearGrayscaleCache: true);
                 currentImageIndex = jumpto;
                 var nextImagePair = ImagePairs[currentImageIndex];
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
+                keyPicture2.ShowFileOk();
                 PreloadForOpenThreshold();
             }
 
@@ -4451,7 +4519,7 @@ namespace RAVEN
         private void PrevImage_Click(object sender, EventArgs e)
         {
             SaveCurrentPageSettings();
-            ClearJPGCache();
+            ClearJPGCache(clearGrayscaleCache: true);
 
             //Clears variabls in case Darken / Lighten has been used back to what is on screen
             thresholdSettingsForm.SetVariables();
@@ -4472,6 +4540,7 @@ namespace RAVEN
                 // Load and display the previous image pair
                 var prevImagePair = ImagePairs[currentImageIndex];
                 DisplayImages(prevImagePair.JPG, prevImagePair.TIF);
+                keyPicture2.ShowFileOk();
                 PreloadForOpenThreshold();
             }
             else
@@ -4501,10 +4570,10 @@ namespace RAVEN
             }
 
             SaveCurrentPageSettings();
-            ClearJPGCache();
+            ClearJPGCache(clearGrayscaleCache: true);
 
             //Clears variabls in case Darken / Lighten has been used back to what is on screen
-            thresholdSettingsForm.SetVariables();            
+            thresholdSettingsForm.SetVariables();
 
             // Check if there are any images in the list
             if (ImagePairs.Any())
@@ -4530,6 +4599,7 @@ namespace RAVEN
                     AutoRemoveLines(nextImagePair.TIF);
                 }
                 DisplayImages(nextImagePair.JPG, nextImagePair.TIF);
+                keyPicture2.ShowFileOk();
                 PreloadForOpenThreshold();
             }
             else
