@@ -61,40 +61,44 @@ public static class RefineThreshold
         byte[] result = (byte[])binary.Clone();
 
         // Step 3: Connected-component labeling + edge analysis + flipping
-        // We use a sequential flood-fill with an explicit stack to avoid
-        // stack overflow on large components and to collect per-component stats
-        // in a single pass.
-        //
-        // The visited array tracks which pixels have been processed.
         // Only black (0) components are candidates for flipping — Recogniform's
         // RefineThreshold removes low-contrast black noise blobs but never
         // converts white regions to black.
+        //
+        // Optimization: pre-mark all white pixels as visited so the flood-fill
+        // only runs on black components. This skips the massive white background
+        // (often 70-85% of all pixels) entirely.
         bool[] visited = new bool[pixelCount];
+        for (int i = 0; i < pixelCount; i++)
+            if (result[i] != 0) visited[i] = true;
 
-        // Reusable stack and component pixel list to reduce allocations
-        var stack = new Stack<int>(Math.Min(pixelCount, 1024));
-        var componentPixels = new List<int>(1024);
+        // Reusable int[] arrays instead of Stack<T>/List<T> to avoid
+        // generic overhead and bounds-checking in the hot flood-fill loop.
+        int[] stack = new int[Math.Min(pixelCount, 65536)];
+        int[] componentPixels = new int[Math.Min(pixelCount, 65536)];
 
         for (int startIdx = 0; startIdx < pixelCount; startIdx++)
         {
             if (visited[startIdx])
                 continue;
 
-            byte componentColor = result[startIdx];
-
-            // Flood-fill to find the connected component and compute edge stats
-            stack.Clear();
-            componentPixels.Clear();
+            // All unvisited pixels are black (componentColor == 0)
+            int stackTop = 0;
+            int compSize = 0;
             long edgeGradientSum = 0;
             int edgePixelCount = 0;
 
-            stack.Push(startIdx);
+            stack[stackTop++] = startIdx;
             visited[startIdx] = true;
 
-            while (stack.Count > 0)
+            while (stackTop > 0)
             {
-                int idx = stack.Pop();
-                componentPixels.Add(idx);
+                int idx = stack[--stackTop];
+
+                // Grow component array if needed
+                if (compSize >= componentPixels.Length)
+                    Array.Resize(ref componentPixels, componentPixels.Length * 2);
+                componentPixels[compSize++] = idx;
 
                 int x = idx % width;
                 int y = idx / width;
@@ -105,19 +109,12 @@ public static class RefineThreshold
 
                 if (x == 0 || y == 0 || x == width - 1 || y == height - 1)
                 {
-                    // Image border pixels are always edge pixels
                     isEdge = true;
                 }
-                else
+                else if (result[idx - 1] != 0 || result[idx + 1] != 0 ||
+                         result[idx - width] != 0 || result[idx + width] != 0)
                 {
-                    // Check 4-connected neighbors for different binary value
-                    if (result[idx - 1] != componentColor ||      // left
-                        result[idx + 1] != componentColor ||      // right
-                        result[idx - width] != componentColor ||  // up
-                        result[idx + width] != componentColor)    // down
-                    {
-                        isEdge = true;
-                    }
+                    isEdge = true;
                 }
 
                 if (isEdge)
@@ -126,70 +123,36 @@ public static class RefineThreshold
                     edgePixelCount++;
                 }
 
-                // Enqueue 4-connected neighbors with the same binary color
-                // Left
+                // Enqueue 4-connected BLACK neighbors
                 if (x > 0)
                 {
                     int ni = idx - 1;
-                    if (!visited[ni] && result[ni] == componentColor)
-                    {
-                        visited[ni] = true;
-                        stack.Push(ni);
-                    }
+                    if (!visited[ni]) { visited[ni] = true; if (stackTop >= stack.Length) Array.Resize(ref stack, stack.Length * 2); stack[stackTop++] = ni; }
                 }
-                // Right
                 if (x < width - 1)
                 {
                     int ni = idx + 1;
-                    if (!visited[ni] && result[ni] == componentColor)
-                    {
-                        visited[ni] = true;
-                        stack.Push(ni);
-                    }
+                    if (!visited[ni]) { visited[ni] = true; if (stackTop >= stack.Length) Array.Resize(ref stack, stack.Length * 2); stack[stackTop++] = ni; }
                 }
-                // Up
                 if (y > 0)
                 {
                     int ni = idx - width;
-                    if (!visited[ni] && result[ni] == componentColor)
-                    {
-                        visited[ni] = true;
-                        stack.Push(ni);
-                    }
+                    if (!visited[ni]) { visited[ni] = true; if (stackTop >= stack.Length) Array.Resize(ref stack, stack.Length * 2); stack[stackTop++] = ni; }
                 }
-                // Down
                 if (y < height - 1)
                 {
                     int ni = idx + width;
-                    if (!visited[ni] && result[ni] == componentColor)
-                    {
-                        visited[ni] = true;
-                        stack.Push(ni);
-                    }
+                    if (!visited[ni]) { visited[ni] = true; if (stackTop >= stack.Length) Array.Resize(ref stack, stack.Length * 2); stack[stackTop++] = ni; }
                 }
             }
 
-            // Only black components are candidates for removal.
-            // White components are never flipped to black.
-            if (componentColor != 0)
-                continue;
-
             // Decision: flip the black component to white if edge contrast is below tolerance
-            bool shouldFlip;
-            if (edgePixelCount == 0)
-            {
-                // No edge pixels at all — isolated region, flip it
-                shouldFlip = true;
-            }
-            else
-            {
-                int avgGradient = (int)(edgeGradientSum / edgePixelCount);
-                shouldFlip = avgGradient < tolerance;
-            }
+            bool shouldFlip = (edgePixelCount == 0) ||
+                              ((int)(edgeGradientSum / edgePixelCount) < tolerance);
 
             if (shouldFlip)
             {
-                for (int i = 0; i < componentPixels.Count; i++)
+                for (int i = 0; i < compSize; i++)
                     result[componentPixels[i]] = 255;
             }
         }

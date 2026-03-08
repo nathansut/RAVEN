@@ -314,20 +314,25 @@ public static class OpenThresholdBridge
         int width, height;
 
         var sw = Stopwatch.StartNew();
-        if (TryGetCache(inputJpgPath, out gray, out grayAvg, out width, out height))
-        {
-            gray = (byte[])gray.Clone(); // don't mutate cache
-            if (grayAvg != null) grayAvg = (byte[])grayAvg.Clone();
-        }
+        byte[] srcGray, srcAvg;
+        if (TryGetCache(inputJpgPath, out srcGray, out srcAvg, out width, out height))
+        { /* cached */ }
         else
-            (gray, grayAvg, width, height) = LoadGrayscalesFromFile(inputJpgPath);
+        { (srcGray, srcAvg, width, height) = LoadGrayscalesFromFile(inputJpgPath); }
 
-        // Invert for negative/photostat
-        for (int i = 0; i < gray.Length; i++)
-            gray[i] = (byte)(255 - gray[i]);
-        if (grayAvg != null)
-            for (int i = 0; i < grayAvg.Length; i++)
-                grayAvg[i] = (byte)(255 - grayAvg[i]);
+        // Clone + invert in a single parallel pass (avoids 2x sequential copy + invert)
+        int len = width * height;
+        gray = new byte[len];
+        grayAvg = srcAvg != null ? new byte[len] : null;
+        Parallel.For(0, height, y =>
+        {
+            int row = y * width;
+            for (int x = 0; x < width; x++)
+            {
+                gray[row + x] = (byte)(255 - srcGray[row + x]);
+                if (grayAvg != null) grayAvg[row + x] = (byte)(255 - srcAvg[row + x]);
+            }
+        });
         sw.Stop();
         LastDecodeMs = sw.ElapsedMilliseconds;
 
