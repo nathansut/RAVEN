@@ -326,31 +326,7 @@ namespace RAVEN
             }
         }
 
-        public async Task RunProcessAsync(string filePath, string arguments)
-        {
-            using (Process process = new Process())
-            {
-                process.StartInfo.FileName = filePath;
-                process.StartInfo.Arguments = arguments;
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.CreateNoWindow = true;
-                process.EnableRaisingEvents = true;
-
-                var tcs = new TaskCompletionSource<bool>();
-
-                process.Exited += (sender, args) =>
-                {
-                    tcs.SetResult(true);
-                    process.Dispose();
-                };
-
-                process.Start();
-
-                await tcs.Task;
-                // Process has exited at this point
-            }
-        }
-        private async void button1_Click(object sender, EventArgs e)
+        private void button1_Click(object sender, EventArgs e)
         {
             if (F2ActiveType.Text != "Dynamic" && F2ActiveType.Text != "ML1" && F2ActiveType.Text != "ML2")
             {
@@ -383,79 +359,9 @@ namespace RAVEN
 
             else if (F2ActiveType.Text == "Dynamic")
             {
-                int contrast = int.Parse(textBoxF2Contrast.Text);
-                int brightness = int.Parse(textBoxF2Brightness.Text);
-                int despeckle = int.Parse(textBoxF2Despeckle.Text);
-
-                // Define the paths
-                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                string scriptFileName = this.F2Negative.Checked ? "PhotostatScript.ips" : "xLooseScript.ips"; // Choose the script based on the checkbox
-                string scriptFilePath = Path.Combine(baseDirectory, scriptFileName);
-                string tempDirectory = Path.Combine(Path.GetTempPath(), "Recog");
-                Directory.CreateDirectory(tempDirectory); // Ensure temp directory exists
-
-                // Copy and modify the script file
-                string tempScriptFilePath = Path.Combine(tempDirectory, scriptFileName);
-                File.Copy(scriptFilePath, tempScriptFilePath, overwrite: true);
-                string scriptContent = File.ReadAllText(tempScriptFilePath);
-
-                // Use Regex to replace, bulletproofing against varying spaces and different object names
-                scriptContent = Regex.Replace(scriptContent,
-                                              @"ImgDynamicThresholdAverage\s*\(\s*(Photostat|_CurrentImage)\s*,\s*7\s*,\s*7\s*,\s*\d+\s*,\s*\d+\s*\);",
-                                              $"ImgDynamicThresholdAverage( $1, 7, 7, {contrast}, {brightness} );");
-
-                scriptContent = Regex.Replace(scriptContent,
-                                              @"ImgDespeckle\s*\(\s*(Photostat|_CurrentImage)\s*,\s*\d+\s*,\s*\d+\s*\);",
-                                              $"ImgDespeckle( $1, {despeckle}, {despeckle} );");
-
-                File.WriteAllText(tempScriptFilePath, scriptContent);
-
-                // Create the launch file with attributes
-                string launchFilePath = Path.Combine(tempDirectory, "DefaultBatchesQueue1.ipb");
-                List<string> launchFileLines = new List<string>
-                {
-                "[Batches]",
-                "Count=1",
-                "[Batch 0]",
-                "Description=Default",
-                "Output Directory=*",
-                "Watching Directory=",
-                "Output Format=1",
-                "TIFF Compression=0",
-                "TIFF Rows per Strip=0",
-                "TIFF Overwrite=1",
-                "TIFF Author=Sutterfield Technologies",
-                "PDF Rasterization=0",
-                "PDFA=0",
-                "PDF Resolution=300",
-                "PDF Auto Color Reduction=1",
-                "JPEG QFactor=80",
-                "Agents=5",
-                "Log=1",
-                "Only Unchecked=1",
-                "Script=" + tempScriptFilePath,
-                "Files Count=" + (imagePairs.Count - currentImageIndex).ToString(),
-                "[Batch 0 Files]"
-                };
-
-                // Generate the list of files to convert without copying them
-                for (int i = currentImageIndex; i < imagePairs.Count; i++)
-                {
-                    string originalJpgPath = imagePairs[i].JPG;
-                    launchFileLines.Add($"{i - currentImageIndex}={originalJpgPath}");
-                }
-                File.WriteAllLines(launchFilePath, launchFileLines);
-
-                // Launch the image processing command
-                string imageProcessorExePath = @"C:\Program Files (x86)\RecogniformTechnologies\ImageProcessor\ImageProcessor.exe";
-
-                string commandLine = $"\"{imageProcessorExePath}\" -auto \"{launchFilePath}\" \"{tempScriptFilePath}\"";
-
-                Clipboard.SetText(commandLine);
-
-                await RunProcessAsync(imageProcessorExePath, $"-auto \"{launchFilePath}\"");
-
-                
+                MessageBox.Show("Dynamic batch conversion has been removed.\n" +
+                    "Use RDynamic or ML1/ML2 instead.",
+                    "Feature Removed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             // Update UI to indicate completion
             this.Invoke((Action)(() =>
@@ -467,10 +373,6 @@ namespace RAVEN
         }
 
 
-        private void RecogConvertPhotostat(string jpg, string tif, int contrast, int brightness)
-        {
-
-        }
 
 
 

@@ -7,7 +7,7 @@ Concepts
 
 3 - Refine Threshold is an alternative setting for REALLY bad areas. It will look weird, and it loses information. It should be thought of as binarizing with extremely dark settings & then using the JPG as a despekle filter. Tolerance should be 10, Despeckle 7 - 12, contrast stepup to 5. 
 
-4 - Convert Rest of Book launches recogniform with the current settings and starts converting the rest of the book. Can continue to work while it darkens / lightens a book for you. 
+4 - Convert Rest of Book applies the current threshold settings to all remaining images in the book.
 
 5 - There is some complexity going on behind the scenese to deal with photostats v non photostats. 
 

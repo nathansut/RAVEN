@@ -406,8 +406,8 @@ namespace RAVEN
             InitializeComponent();
             InitializeConversionSettings();
 
-            int TempRecog = RavenImaging.ImgCreate(100, 100, 2, 300);
-            RavenImaging.ImgDelete(TempRecog); 
+            int warmupHandle = RavenImaging.ImgCreate(100, 100, 2, 300);
+            RavenImaging.ImgDelete(warmupHandle); 
 
             this.KeyPreview = true;
             this.KeyDown += new KeyEventHandler(Form1_KeyDown);
@@ -764,7 +764,7 @@ namespace RAVEN
 
         private void RemoveLine(string Image, int X)
         {
-            USVWin.RemoveDirtyLine(Image, 1, Image, 3, X);
+            RavenImaging.RemoveDirtyLine(Image, 1, Image, 3, X);
 
             if (this.AutoLineRemovalmode == true)
             {
@@ -1239,13 +1239,13 @@ namespace RAVEN
                 {
                     // Switch program to "WhiteoutCrop" mode. This results in 
                     // A - All crop features work the same EXCEPT that instead of "cropping" the TIF image - it whites out all the areas outside the selected area. 
-                    // If you can't figure out the recogniform commands - at least get the dimensions that need to be whited out - outside of the drawn box
+                    // Get the dimensions that need to be whited out - outside of the drawn box
                     // Crude way would be current selected rectangle - everything left of that
                     // Everything above that
                     // Everything to the right of that
                     // Everything to the bottom of that 
                     // 4 Rectangles
-                    // Let programmer figure out whiteout command from Calvin / Recog functions
+                    // Whiteout uses RavenImaging.EraseOut (C# implementation)
                     isWhiteoutMode = !isWhiteoutMode;
                     string modeText = isWhiteoutMode ? "Whiteout" : "Normal";
                     StatusUpdate($"Switched to {modeText} mode");
@@ -1320,7 +1320,7 @@ namespace RAVEN
         }
 
 
-        // Alternate one - that launches recogniform.
+        // Alternate multipage modify — area-based conversion across pages.
         private void MultipageModifyAlt(Keys pressedKey)
         {
             // [ = Initialize / Uninitialize & Clear Cordinates
@@ -1328,7 +1328,7 @@ namespace RAVEN
 
             //Was [ key pressed (initialize) & initialize not already set?
 
-            bool IsDynamicOrML(string type) => type == "Dynamic" || type == "RDynamic" || type == "ML1" || type == "ML2";
+            bool IsDynamicOrML(string type) => type == "Dynamic" || type == "RDynamic" || type == "Refine" || type == "ML1" || type == "ML2";
 
             if (pressedKey == Keys.OemOpenBrackets)
             {
@@ -1405,7 +1405,7 @@ namespace RAVEN
                     {
                         hasSBB = true;
                     }
-                    if (type == "Dynamic" || type == "RDynamic")
+                    if (type == "Dynamic" || type == "RDynamic" || type == "Refine")
                     {
                         hasDynamic = true;
                     }
@@ -1460,132 +1460,456 @@ namespace RAVEN
                 // Loop thru each setting, convert that area.         
         }
 
-        private async void MultipageModifyAlt_Dynamic()
+        // Flag to prevent overlapping batch conversions
+        private volatile bool _batchConvertRunning = false;
+
+        /// <summary>
+        /// Multi-threaded batch conversion for Dynamic/RDynamic/Refine types.
+        /// Processes all remaining images from currentImageIndex using the byte-array
+        /// pipeline directly (thread-safe, no shared static cache or handle API).
+        /// Runs in the background so the UI stays responsive.
+        /// </summary>
+        private void MultipageModifyAlt_Dynamic()
         {
+            if (_batchConvertRunning)
             {
-                // Check if vMultipageModifyList has any items
-
-
-                string exePath = AppDomain.CurrentDomain.BaseDirectory;
-                string MultiConvList = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MultiEditList.txt");
-                string MultiFileList = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MultiFileList.txt");
-                string multiAreaScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MultiAreaScript.ips");
-                string ipbFile = Path.Combine(exePath, "DefaultBatchesQueue2.ipb");
-
-                File.Delete(ipbFile);
-
-                List<string> ConvImgList = new List<string>();
-
-
-                File.Delete(MultiConvList);
-                File.Delete(MultiFileList);
-
-
-                var _imagePairs = this.ImagePairs;
-                int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
-
-                // Need to only do this if at least one selection
-
-                // Loop through each image
-                for (int i = currentImageIndex; i < _imagePairs.Count; i += increment)
-                {
-                    // Check if JPG & TIF dimensions match 
-                    if (!VerifyMatchingDimensions(_imagePairs[i].TIF, _imagePairs[i].JPG))
-                    {
-                        AddStatusUpdate($"{_imagePairs[i].JPG} Not Matching TIF/JPG Dimensions");
-                        continue;  // Skip this file if dimensions don't match
-                    }
-
-                    // Add file to MultiFileList.txt
-                    File.AppendAllText(MultiFileList, _imagePairs[i].JPG + Environment.NewLine);
-                    ConvImgList.Add(_imagePairs[i].JPG);
-
-                    // Loop through each conversion setting for this file
-                    foreach (var entry in vMultipageModifyList)
-                    {
-                        int left = entry.Item1;
-                        int top = entry.Item2;
-                        int right = entry.Item3;
-                        int bottom = entry.Item4;
-                        ConversionSettings _ConvSetting = entry.Item5;
-
-                        int _Contrast = _ConvSetting.Contrast;
-                        int _Despeckle = _ConvSetting.Despeckle;
-                        int _Brightness = _ConvSetting.Brightness;
-                        int _Negative = _ConvSetting.NegativeImage ? 1 : 0;
-
-                        string outputLine = $"{_imagePairs[i].JPG},{left},{top},{right},{bottom},{_Contrast},{_Brightness},{_Despeckle},{_Negative}";
-
-                        // Append settings conversion to MultiConvList.txt
-                        File.AppendAllText(MultiConvList, outputLine + Environment.NewLine);
-
-                        AddStatusUpdate($"Threshold {_imagePairs[i].JPG} {left},{top},{right},{bottom}");
-                    }
-
-                }
-
-                //insertcommandshere part of the function. 
-
-
-
-
-
-                string[] lines = File.ReadAllLines(multiAreaScript);
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    if (lines[i].StartsWith("FileString:="))
-                    {
-                        lines[i] = $"FileString:='{MultiConvList}';";
-                        break;
-                    }
-                }
-                File.WriteAllLines(multiAreaScript, lines);
-                AddStatusUpdate("Updated MultiAreaScript.ips with new FileString path.");
-
-                List<string> launchFileLines = new List<string>
-                {
-                    "[Batches]",
-                    "Count=1",
-                    "[Batch 0]",
-                    "Description=Default",
-                    "Output Directory=*",
-                    "Watching Directory=",
-                    "Output Format=0",
-                    "TIFF Compression=0",
-                    "TIFF Rows per Strip=0",
-                    "TIFF Overwrite=0",
-                    "TIFF Author=Sutterfield Technologies",
-                    "PDF Rasterization=0",
-                    "PDFA=0",
-                    "PDF Resolution=300",
-                    "PDF Auto Color Reduction=1",
-                    "JPEG QFactor=80",
-                    "Agents=8",
-                    "Log=0",
-                    "Only Unchecked=1",
-                    "Script=" + multiAreaScript,
-                    "Files Count=" + ConvImgList.Count,
-                    "[Batch 0 Files]"
-                };
-
-                //Append JPG to the list
-                for (int i = 0; i < ConvImgList.Count; i++)
-                {
-                    string originalJpgPath = ConvImgList[i];
-                    launchFileLines.Add($"{i}={originalJpgPath}");
-                }
-                File.WriteAllLines(ipbFile, launchFileLines);
-                string imageProcessorExePath = @"C:\Program Files (x86)\RecogniformTechnologies\ImageProcessor\ImageProcessor.exe";
-
-                string commandLine = $"\"{imageProcessorExePath}\" -auto \"{ipbFile}\" \"{multiAreaScript}\"";
-                Clipboard.SetText(commandLine);
-
-                this.vMultipageModifyMode = MultipageModifyMode.Uninitialized;
-                AddStatusUpdate("Area Conversion Uninitialized", true);
-
-                await thresholdSettingsForm.RunProcessAsync(imageProcessorExePath, $"-auto \"{ipbFile}\"");
-                vMultipageModifyList.Clear();
+                AddStatusUpdate("Batch conversion already in progress.");
+                return;
             }
+
+            // Snapshot everything we need before going async
+            var modifyList = vMultipageModifyList
+                .Select(t => (x1: t.Item1, y1: t.Item2, x2: t.Item3, y2: t.Item4, settings: t.Item5))
+                .ToList();
+
+            // Separate full-page entries (coords <= 0) from area entries (positive coords)
+            var areaEntries = modifyList.Where(a => a.x1 < a.x2 && a.y1 < a.y2).ToList();
+            var fullPageEntries = modifyList.Where(a => a.x1 <= 0 && a.y1 <= 0 && a.x2 <= 0 && a.y2 <= 0).ToList();
+
+            if (areaEntries.Count == 0 && fullPageEntries.Count == 0)
+            {
+                AddStatusUpdate("No valid conversions to apply.");
+                vMultipageModifyList.Clear();
+                return;
+            }
+
+            // Check if any full-page entry uses the photostat pipeline
+            bool anyPhotostat = fullPageEntries.Any(fp =>
+                fp.settings.NegativeImage &&
+                (fp.settings.Type == "RDynamic" || fp.settings.Type == "Dynamic"));
+
+            var imagePairs = this.ImagePairs;
+            int startIndex = this.currentImageIndex;
+            int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
+
+            var indices = new List<int>();
+            for (int i = startIndex; i < imagePairs.Count; i += increment)
+                indices.Add(i);
+
+            if (indices.Count == 0)
+            {
+                AddStatusUpdate("No images to process.");
+                vMultipageModifyList.Clear();
+                return;
+            }
+
+            int totalImages = indices.Count;
+            int maxParallelism = Math.Max(1, Environment.ProcessorCount - 2);
+
+            _batchConvertRunning = true;
+            AddStatusUpdate($"Batch converting {totalImages} images ({maxParallelism} threads)...");
+
+            // Ensure any pending single-image save completes before batch starts
+            OpenThresholdBridge.WaitForPendingSave();
+
+            // Clear the list now — we've captured everything we need
+            vMultipageModifyList.Clear();
+
+            Task.Run(() =>
+            {
+                int completedCount = 0;
+                int skippedCount = 0;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                try
+                {
+                    var options = new ParallelOptions { MaxDegreeOfParallelism = maxParallelism };
+
+                    Parallel.ForEach(indices, options, imageIndex =>
+                    {
+                        string jpgPath = imagePairs[imageIndex].JPG;
+                        string tifPath = imagePairs[imageIndex].TIF;
+
+                        try
+                        {
+                            // Verify dimensions match (reads file headers only, thread-safe)
+                            int jpgW = 0, jpgH = 0, tifW = 0, tifH = 0;
+                            RavenImaging.GetImageInfo(jpgPath, 1, ref jpgW, ref jpgH);
+                            RavenImaging.GetImageInfo(tifPath, 1, ref tifW, ref tifH);
+                            if (jpgW != tifW || jpgH != tifH)
+                            {
+                                Interlocked.Increment(ref skippedCount);
+                                return;
+                            }
+
+                            // Decode JPEG to grayscale byte arrays (thread-local, no shared state)
+                            byte[] grayLut, grayAvg;
+                            byte[] bgr = null;
+                            int bgrStride = 0;
+                            int fullWidth, fullHeight;
+
+                            if (anyPhotostat)
+                            {
+                                // Photostat needs BGR data for bleed-through removal
+                                (grayLut, bgr, bgrStride, fullWidth, fullHeight) =
+                                    RavenImaging.LoadImageAsGrayscaleAndBgr(jpgPath);
+                                // Compute avg grayscale from BGR for Refine support
+                                grayAvg = new byte[fullWidth * fullHeight];
+                                Parallel.For(0, fullHeight, y =>
+                                {
+                                    int srcRow = y * bgrStride;
+                                    int dstRow = y * fullWidth;
+                                    for (int x = 0; x < fullWidth; x++)
+                                    {
+                                        int off = srcRow + x * 3;
+                                        grayAvg[dstRow + x] = (byte)((bgr[off + 2] + bgr[off + 1] + bgr[off] + 1) / 3);
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                (grayLut, grayAvg, fullWidth, fullHeight) =
+                                    RavenImaging.LoadImageAsGrayscaleDual(jpgPath);
+                            }
+
+                            // Process full-page entries first (if any)
+                            // Last full-page entry wins (replaces entire TIF)
+                            if (fullPageEntries.Count > 0)
+                            {
+                                var fp = fullPageEntries[fullPageEntries.Count - 1];
+                                bool refine = fp.settings.Type == "Refine";
+                                int contrast = refine
+                                    ? fp.settings.Contrast + fp.settings.FilterThresholdStepup
+                                    : fp.settings.Contrast;
+                                int brightness = fp.settings.Brightness;
+                                int despeckle = refine ? fp.settings.DespeckleFilter : fp.settings.Despeckle;
+                                int tolerance = fp.settings.Tolerance;
+                                bool negative = fp.settings.NegativeImage;
+
+                                byte[] binary;
+
+                                if (negative && (fp.settings.Type == "RDynamic" || fp.settings.Type == "Dynamic"))
+                                {
+                                    // Full photostat pipeline with border detection + bleed-through
+                                    binary = BatchConvertPhotostatFull(bgr, bgrStride,
+                                        grayLut, fullWidth, fullHeight, contrast, brightness, despeckle);
+                                }
+                                else
+                                {
+                                    byte[] srcGray = grayLut;
+                                    byte[] srcAvg = grayAvg;
+
+                                    if (negative)
+                                    {
+                                        // Simple negative: clone + invert
+                                        srcGray = new byte[fullWidth * fullHeight];
+                                        srcAvg = grayAvg != null ? new byte[fullWidth * fullHeight] : null;
+                                        for (int i = 0; i < srcGray.Length; i++)
+                                        {
+                                            srcGray[i] = (byte)(255 - grayLut[i]);
+                                            if (srcAvg != null) srcAvg[i] = (byte)(255 - grayAvg[i]);
+                                        }
+                                    }
+
+                                    binary = RavenImaging.DynamicThresholdApply(
+                                        srcGray, fullWidth, fullHeight, 7, 7, contrast, brightness);
+                                    if (refine && srcAvg != null)
+                                        binary = RavenImaging.RefineThresholdApply(
+                                            binary, srcAvg, fullWidth, fullHeight, tolerance);
+                                    if (despeckle > 0)
+                                        RavenImaging.DespeckleBytes(binary, fullWidth, fullHeight,
+                                            despeckle, despeckle);
+                                }
+
+                                RavenImaging.SaveAsCcitt4Tif(binary, fullWidth, fullHeight, tifPath);
+                            }
+
+                            // Process area entries (composite onto existing TIF)
+                            if (areaEntries.Count > 0)
+                            {
+                                // Load existing TIF pixels for compositing
+                                byte[] tifPixels;
+                                int tw, th;
+                                if (File.Exists(tifPath))
+                                {
+                                    (tifPixels, tw, th) = RavenImaging.LoadImageAsGrayscale(tifPath);
+                                }
+                                else
+                                {
+                                    tw = fullWidth; th = fullHeight;
+                                    tifPixels = new byte[tw * th];
+                                    Array.Fill(tifPixels, (byte)255);
+                                }
+
+                                foreach (var area in areaEntries)
+                                {
+                                    // Clamp coordinates to image bounds
+                                    int ax1 = Math.Max(0, Math.Min(area.x1, fullWidth));
+                                    int ay1 = Math.Max(0, Math.Min(area.y1, fullHeight));
+                                    int ax2 = Math.Max(0, Math.Min(area.x2, fullWidth));
+                                    int ay2 = Math.Max(0, Math.Min(area.y2, fullHeight));
+                                    int cropW = ax2 - ax1, cropH = ay2 - ay1;
+                                    if (cropW <= 0 || cropH <= 0) continue;
+
+                                    bool refine = area.settings.Type == "Refine";
+                                    int contrast = refine
+                                        ? area.settings.Contrast + area.settings.FilterThresholdStepup
+                                        : area.settings.Contrast;
+                                    int brightness = area.settings.Brightness;
+                                    int despeckle = refine
+                                        ? area.settings.DespeckleFilter
+                                        : area.settings.Despeckle;
+                                    int tolerance = area.settings.Tolerance;
+                                    bool negative = area.settings.NegativeImage;
+
+                                    // Extract crop from LUT grayscale
+                                    byte[] cropGray = new byte[cropW * cropH];
+                                    for (int row = 0; row < cropH; row++)
+                                        Buffer.BlockCopy(grayLut,
+                                            (ay1 + row) * fullWidth + ax1,
+                                            cropGray, row * cropW, cropW);
+
+                                    if (negative)
+                                    {
+                                        for (int i = 0; i < cropGray.Length; i++)
+                                            cropGray[i] = (byte)(255 - cropGray[i]);
+                                    }
+
+                                    // Extract crop from avg grayscale (for Refine)
+                                    byte[] cropGrayAvg = null;
+                                    if (refine && grayAvg != null)
+                                    {
+                                        cropGrayAvg = new byte[cropW * cropH];
+                                        for (int row = 0; row < cropH; row++)
+                                            Buffer.BlockCopy(grayAvg,
+                                                (ay1 + row) * fullWidth + ax1,
+                                                cropGrayAvg, row * cropW, cropW);
+                                        if (negative)
+                                        {
+                                            for (int i = 0; i < cropGrayAvg.Length; i++)
+                                                cropGrayAvg[i] = (byte)(255 - cropGrayAvg[i]);
+                                        }
+                                    }
+
+                                    // Threshold the crop
+                                    byte[] binary = RavenImaging.DynamicThresholdApply(
+                                        cropGray, cropW, cropH, 7, 7, contrast, brightness);
+                                    if (refine && cropGrayAvg != null)
+                                        binary = RavenImaging.RefineThresholdApply(
+                                            binary, cropGrayAvg, cropW, cropH, tolerance);
+                                    if (despeckle > 0)
+                                        RavenImaging.DespeckleBytes(binary, cropW, cropH,
+                                            despeckle, despeckle);
+
+                                    // Composite: paste thresholded crop into TIF at (ax1, ay1)
+                                    for (int row = 0; row < cropH; row++)
+                                        Buffer.BlockCopy(binary, row * cropW,
+                                            tifPixels, (ay1 + row) * tw + ax1, cropW);
+                                }
+
+                                // Save the composited TIF
+                                RavenImaging.SaveAsCcitt4Tif(tifPixels, tw, th, tifPath);
+                            }
+
+                            int done = Interlocked.Increment(ref completedCount);
+                            if (done % 5 == 0 || done == totalImages)
+                            {
+                                this.BeginInvoke(new Action(() =>
+                                    AddStatusUpdate($"Batch converting... {done}/{totalImages}")));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Interlocked.Increment(ref skippedCount);
+                            System.Diagnostics.Debug.WriteLine(
+                                $"Batch convert error on {jpgPath}: {ex.Message}");
+                        }
+                    });
+
+                    sw.Stop();
+                    string msg = $"Batch complete: {completedCount} converted, {skippedCount} skipped" +
+                                 $" in {sw.Elapsed.TotalSeconds:F1}s";
+
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        AddStatusUpdate(msg, true);
+                        RefreshDisplayImage();
+                        _batchConvertRunning = false;
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        AddStatusUpdate($"Batch conversion failed: {ex.Message}");
+                        _batchConvertRunning = false;
+                    }));
+                }
+            });
+        }
+
+        /// <summary>
+        /// Thread-safe full photostat conversion using byte-array pipeline only.
+        /// Replicates OpenThresholdBridge.ApplyThresholdToFilePhotostat logic
+        /// without touching any static cache state. All operations use local arrays.
+        /// </summary>
+        private static byte[] BatchConvertPhotostatFull(byte[] bgr, int bgrStride,
+            byte[] grayLut, int W, int H, int contrast, int brightness, int despeckle)
+        {
+            // Clone BGR since bleed-through removal modifies it in-place
+            byte[] bgrCopy = new byte[bgr.Length];
+            Buffer.BlockCopy(bgr, 0, bgrCopy, 0, bgr.Length);
+
+            // Phase 1: Border detection + BT background detection (overlapped)
+            int T = 0;
+            int aLeft = 0, aTop = 0, aRight = 0, aBottom = 0;
+            int bLeft = 0, bTop = 0, bRight = 0, bBottom = 0;
+            int cLeft = 0, cTop = 0, cRight = 0, cBottom = 0;
+            int aW = 0, aH = 0, bW = 0, bH = 0, contentW = 0, contentH = 0;
+            byte[] aGray = null;
+            int btBgH = 0, btBgS = 0, btBgL = 0, btOtsu = 0;
+            bool borderFailed = false;
+
+            Parallel.Invoke(
+                () =>
+                {
+                    T = RavenImaging.NativeAutoThresholdPublic(grayLut, W, H, W, 2);
+                    byte[] borderPacked = RavenImaging.ThresholdAndPack1bpp(grayLut, W, H, T);
+                    int byteW = (W + 7) / 8;
+
+                    aLeft   = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 0, 90.0, 1);
+                    aTop    = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 2, 90.0, 1);
+                    aRight  = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 1, 90.0, 1);
+                    aBottom = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 3, 90.0, 1);
+                    if (aLeft > aRight || aTop > aBottom) { borderFailed = true; return; }
+
+                    aW = aRight - aLeft + 1; aH = aBottom - aTop + 1;
+                    aGray = RavenImaging.ExtractGrayscaleSubRegion(grayLut, W, aLeft, aTop, aRight, aBottom);
+                    byte[] aCropPacked = RavenImaging.ThresholdAndPack1bpp(aGray, aW, aH, T);
+                    int aCropByteW = (aW + 7) / 8;
+                    for (int i = 0; i < aCropPacked.Length; i++) aCropPacked[i] = (byte)~aCropPacked[i];
+
+                    bLeft   = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 0, 99.0, 1);
+                    bTop    = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 2, 99.0, 1);
+                    bRight  = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 1, 99.0, 1);
+                    bBottom = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 3, 99.0, 1);
+                    bLeft += 20; bRight -= 20;
+                    if (bLeft > bRight || bTop > bBottom) { borderFailed = true; return; }
+
+                    bW = bRight - bLeft + 1; bH = bBottom - bTop + 1;
+                    byte[] bGrayForBorder = RavenImaging.ExtractGrayscaleSubRegion(aGray, aW, bLeft, bTop, bRight, bBottom);
+                    byte[] bCropPacked = RavenImaging.ThresholdAndPack1bpp(bGrayForBorder, bW, bH, T);
+                    int bCropByteW = (bW + 7) / 8;
+                    for (int i = 0; i < bCropPacked.Length; i++) bCropPacked[i] = (byte)~bCropPacked[i];
+
+                    cLeft   = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 0, 80.0, 30);
+                    cTop    = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 2, 80.0, 100);
+                    cRight  = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 1, 80.0, 30);
+                    cBottom = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 3, 80.0, 100);
+                    contentW = cRight - cLeft + 1; contentH = cBottom - cTop + 1;
+                },
+                () =>
+                {
+                    RavenImaging.RemoveBleedThroughGetBackground(bgrCopy, W, H, bgrStride,
+                        out btBgH, out btBgS, out btBgL, out btOtsu);
+                }
+            );
+
+            if (borderFailed)
+                return new byte[W * H]; // White image on border detection failure
+
+            // Phase 2: Bleed-through removal (modifies bgrCopy in-place, row-parallel)
+            int nThreads = Environment.ProcessorCount;
+            int rowsPerThread = (H + nThreads - 1) / nThreads;
+            Parallel.For(0, nThreads, t =>
+            {
+                int startY = t * rowsPerThread;
+                int endY = Math.Min(startY + rowsPerThread, H);
+                if (startY < endY)
+                    RavenImaging.RemoveBleedThroughApplyRows(bgrCopy, W, H, bgrStride, 1,
+                        btBgH, btBgS, btBgL, startY, endY);
+            });
+
+            // Phase 3: Post-BT grayscale conversion
+            int absContentLeft  = aLeft + bLeft + cLeft;
+            int absContentTop   = aTop  + bTop  + cTop;
+            int absContentRight = aLeft + bLeft + cRight;
+            int absContentBottom = aTop + bTop + cBottom;
+            int absBLeft = aLeft + bLeft, absBTop = aTop + bTop;
+            int absBRight = aLeft + bRight, absBBottom = aTop + bBottom;
+
+            byte[] grayPost = new byte[W * H];
+            byte[] contentGray = null;
+
+            Parallel.Invoke(
+                () =>
+                {
+                    Parallel.For(0, H, y =>
+                    {
+                        int srcRow = y * bgrStride;
+                        int dstRow = y * W;
+                        for (int x = 0; x < W; x++)
+                        {
+                            int off = srcRow + x * 3;
+                            grayPost[dstRow + x] = (byte)(RavenImaging.LutR[bgrCopy[off + 2]]
+                                + RavenImaging.LutG[bgrCopy[off + 1]] + RavenImaging.LutB[bgrCopy[off]]);
+                        }
+                    });
+                },
+                () =>
+                {
+                    contentGray = RavenImaging.ExtractGrayscaleFromBgr(bgrCopy, bgrStride,
+                        absContentLeft, absContentTop, absContentRight, absContentBottom, invert: true);
+                }
+            );
+
+            byte[] aGrayPost = RavenImaging.ExtractGrayscaleSubRegion(grayPost, W, aLeft, aTop, aRight, aBottom);
+            byte[] bGrayPost = RavenImaging.ExtractGrayscaleSubRegion(grayPost, W, absBLeft, absBTop, absBRight, absBBottom);
+
+            // Phase 4: Parallel AT + content DT + cleanup
+            byte[] fullResult = new byte[W * H];
+            byte[] aResult = new byte[aW * aH];
+            byte[] bResult = new byte[bW * bH];
+            byte[] contentBinary = null;
+
+            Parallel.Invoke(
+                () => RavenImaging.AdaptiveThresholdApply(grayPost, fullResult, W, H, 7, 7, -1, -1),
+                () => RavenImaging.AdaptiveThresholdApply(aGrayPost, aResult, aW, aH, 7, 7, 40, 230),
+                () => RavenImaging.AdaptiveThresholdApply(bGrayPost, bResult, bW, bH, 7, 7, 40, 230),
+                () =>
+                {
+                    contentBinary = RavenImaging.DynamicThresholdApply(contentGray, contentW, contentH,
+                        7, 7, contrast, brightness);
+                    byte[] contentPacked = RavenImaging.PackTo1bpp(contentBinary, contentW, contentH);
+                    int cByteW = (contentW + 7) / 8;
+                    if (despeckle > 0)
+                        RavenImaging.DespeckleApply(contentPacked, cByteW, contentW, contentH, despeckle, despeckle);
+                    RavenImaging.RemoveBlackWiresDirect(contentPacked, cByteW, contentW, contentH);
+                    int PhHeight = contentH - 10;
+                    int PhRatio = PhHeight / 5;
+                    int phBreaks = PhHeight - 15000;
+                    RavenImaging.RemoveVerticalLinesDirect(contentPacked, cByteW, contentW, contentH,
+                        PhHeight, phBreaks, PhRatio);
+                    RavenImaging.UnpackFrom1bpp(contentPacked, contentBinary, contentW, contentH);
+                }
+            );
+
+            // Composite: content -> page -> overscan -> full
+            RavenImaging.CompositeBytes(contentBinary, contentW, contentH, bResult, bW, cLeft, cTop);
+            RavenImaging.CompositeBytes(bResult, bW, bH, aResult, aW, bLeft, bTop);
+            RavenImaging.CompositeBytes(aResult, aW, aH, fullResult, W, aLeft, aTop);
+
+            return fullResult;
         }
 
 
@@ -1717,6 +2041,7 @@ namespace RAVEN
                // Not a blank image - so we insert one. 
                int _ImageCopyHandle = RavenImaging.ImgOpen(_tif, 0);
                var (_width, _height) = GetDimensions(_tif);
+               RavenImaging.ImgDelete(_ImageCopyHandle);
                int _NewImg = RavenImaging.ImgCreate(_width, _height, 1, 300);
 
                 
@@ -1767,18 +2092,20 @@ namespace RAVEN
 
             if (image.EndsWith(".tif", StringComparison.OrdinalIgnoreCase))
             {
-                bool ImgSaved = RecogSaveImage(_Rotatehandle, image);
+                bool ImgSaved = SaveImageVerified(_Rotatehandle, image);
             }
 
             if (image.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) || image.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase))
             {
-                bool ImgSaved = RecogSaveImage(_Rotatehandle, image); 
+                bool ImgSaved = SaveImageVerified(_Rotatehandle, image); 
             }
             
 
-            //add a section to flip the jpg imgrotate works in recog for jpgs may not play well with check point system
+            //add a section to flip the jpg — RavenImaging.ImgRotate works for jpgs, may not play well with checkpoint system
 
             // using finerotate tag currently may not be needed if jpg is also flipped 
+            RavenImaging.ImgDelete(_Rotatehandle);
+
             if (!IsFineRotated(image))
             {
                 WriteFineRotationTag(image, true);
@@ -1821,7 +2148,7 @@ namespace RAVEN
             // Change using TIF tag to adding column of white. 
             RavenImaging.ImgResize(_Rotatehandle, newWidth, newHeight, 0); 
 
-            bool ImgSaved = RecogSaveImage(_Rotatehandle, image);
+            bool ImgSaved = SaveImageVerified(_Rotatehandle, image);
 
             // We use adding a pixel now instead of rotate tag. Safer. 
             // bool isRotated = IsFineRotated(image);
@@ -1898,12 +2225,10 @@ namespace RAVEN
         }
 
 
-        // This built to handle saving images from recog 
-        // Verify write from recog (know that we've written)
-        // Verify windows file deleted to overwrite (if exists)
-        // Verify recog file written to prev file
+        // Verified save via RavenImaging — writes to temp then replaces original.
+        // Ensures file is deleted before overwrite and verifies final file exists.
         // 5 ms slower than suggested GPT but I like more saving at the very end.
-        private static bool RecogSaveImage(int ImgHandle, string filePath)
+        private static bool SaveImageVerified(int ImgHandle, string filePath)
         {
             string extension = Path.GetExtension(filePath).ToLower();
             if (!new[] { ".tif", ".jpg", ".jpeg" }.Contains(extension))
@@ -1935,8 +2260,7 @@ namespace RAVEN
                 }
 
                 // Replace the target file with our temp file
-                if (File.Exists(filePath)) File.Delete(filePath);
-                File.Move(tmpFile, filePath);
+                File.Move(tmpFile, filePath, overwrite: true);
 
                 return File.Exists(filePath);
             }
@@ -1995,7 +2319,7 @@ namespace RAVEN
         {   
             CreateCheckpoint(tifimage);
 
-            USVWin.SKEWCORRECT(tifimage, tifimage);
+            RavenImaging.SKEWCORRECT(tifimage, tifimage);
             DisplayImages(string.Empty, tifimage, 2, true);
             activecropbox = false;
         }
@@ -2323,7 +2647,7 @@ namespace RAVEN
 
             // Perform the crop
             RavenImaging.ImgCropBorder(TifHandle, X1, Y1, X2, Y2);
-            RecogSaveImage(TifHandle, tifimage);                
+            SaveImageVerified(TifHandle, tifimage);                
             RavenImaging.ImgDelete(TifHandle); // Clean up TIF image handle
 
             // Crop JPG if Special_CropJPG is enabled
@@ -3029,7 +3353,7 @@ namespace RAVEN
                     string TempFile = SaveTemp(tifimage); 
 
                     // HORRIBLE - should replace this w new library if it's faster - prob is. Going overwrite file EACH time
-                    USVWin.EraseIn(tifimage, TempFile, ((short)x1), ((short)y1), ((short)x2), ((short)y2));
+                    RavenImaging.EraseIn(tifimage, TempFile, ((short)x1), ((short)y1), ((short)x2), ((short)y2));
 
                     if (VerifyDelete(tifimage))
                     {
@@ -3067,7 +3391,7 @@ namespace RAVEN
             int height = Y2 - Y1;
 
             // Corrected call with width and height
-            // USVWin.EraseIn(tifimage, tifimage + ".tif", ((short)X1), ((short)Y1), ((short)width), ((short)height));
+            // RavenImaging.EraseIn(tifimage, tifimage + ".tif", ((short)X1), ((short)Y1), ((short)width), ((short)height));
             
             // May need to do a dedicated filereplace
 
@@ -3075,11 +3399,11 @@ namespace RAVEN
 
             if (EraseOut == true)
             {
-                USVWin.EraseOut(tifimage, TempFile, ((short)X1), ((short)Y1), ((short)X2), ((short)Y2));
+                RavenImaging.EraseOut(tifimage, TempFile, ((short)X1), ((short)Y1), ((short)X2), ((short)Y2));
             }
             else
             {
-                USVWin.EraseIn(tifimage, TempFile, ((short)X1), ((short)Y1), ((short)X2), ((short)Y2));
+                RavenImaging.EraseIn(tifimage, TempFile, ((short)X1), ((short)Y1), ((short)X2), ((short)Y2));
             }
             if (VerifyDelete(tifimage))
             {
@@ -3160,7 +3484,7 @@ namespace RAVEN
             if (TifHandlePartial != 0) RavenImaging.ImgDelete(TifHandlePartial); // Clean up TIF image handle if it was used 
 
             // Save the final thresholded TIF image
-            RecogSaveImage(TifHandle, tifimage); 
+            SaveImageVerified(TifHandle, tifimage); 
 
             if (TifHandle != 0) RavenImaging.ImgDelete(TifHandle); // Clean up TIF image handle if it was used
 
@@ -3175,8 +3499,8 @@ namespace RAVEN
             int width = 0;
             int height = 0;
 
-            // Assume USVWin.GetImageInfo is a method that sets the width and height based on the image file
-            USVWin.GetImageInfo(filePath, page, ref width, ref height);
+            // Assume RavenImaging.GetImageInfo is a method that sets the width and height based on the image file
+            RavenImaging.GetImageInfo(filePath, page, ref width, ref height);
 
             return (width, height);
         }
@@ -3202,28 +3526,7 @@ namespace RAVEN
             MessageBox.Show(message, "Executable Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
 
-            // deskewrecog(ImagePairs[currentImageIndex].TIF);
-
-            /*
-            string sourceDirectory = @"C:\temp\1"; // Directory containing TIF files
-            List<string> tifFiles = new List<string>(); // To hold paths of TIF files
-
-            // Create an instance of DirectoryInfo to manage file information
-            DirectoryInfo dir = new DirectoryInfo(sourceDirectory);
-
-            // USVWin.VW_CombineMultiplePageTiffs(@"C:\temp\CalvinTif_1.tif", @"C:\temp\CalvinTif_2.tif", @"C:\temp\CalvinTif_Both.tif");
-            // Get all TIF files in the directory
-            FileInfo[] files = dir.GetFiles("*.tif");
-            foreach (FileInfo file in files)
-            {
-                // USVWin.VW_CombineMultipleTiffPages(file.FullName, @"C:\temp\CalvinTif.tif", 2);
-                
-                USVWin.COMBINETIFFS(@"C:\temp\CalvinTif.tif", file.FullName);
-
-                //Kinda works but overwrites / not really.
-                // USVWin.VW_CombineMultiplePageTiffs(file.FullName, @"", @"C:\temp\CalvinTif_Output.tif");
-            }
-            */
+            // deskew(ImagePairs[currentImageIndex].TIF);
 
         }
 
@@ -3539,7 +3842,7 @@ namespace RAVEN
             // Save the final thresholded TIF image
             {
                 var swSave = System.Diagnostics.Stopwatch.StartNew();
-                RecogSaveImage(TifHandle, outputTIF);
+                SaveImageVerified(TifHandle, outputTIF);
                 swSave.Stop();
                 if (_lastThresholdDetail != null)
                     _lastThresholdDetail = _lastThresholdDetail.Replace(")", $" save:{swSave.ElapsedMilliseconds})");

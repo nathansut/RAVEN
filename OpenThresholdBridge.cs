@@ -14,8 +14,8 @@ namespace RAVEN;
 public static class OpenThresholdBridge
 {
     // Grayscale cache: preloaded from the current JPEG so threshold doesn't wait for disk.
-    // _cachedGray uses the LUT formula (matches Recogniform DT internally).
-    // _cachedGrayAvg uses the avg formula (matches Recogniform ImgConvertToGrayScale for Refine).
+    // _cachedGray uses the NTSC LUT formula (R=0.30, G=0.59, B=0.11) for DynamicThreshold.
+    // _cachedGrayAvg uses the avg formula ((R+G+B+1)/3) for RefineThreshold.
     // _cachedBgr + _cachedBgrStride: raw BGR pixel data for photostat pipeline.
     private static byte[]  _cachedGray;
     private static byte[]  _cachedGrayAvg;

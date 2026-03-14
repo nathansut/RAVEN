@@ -42,7 +42,7 @@
     <Content Include="Help.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="recoip_native.dll">
+    <Content Include="raven_native.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="turbojpeg.dll">
@@ -60,17 +60,11 @@
     <Content Include="ReadMe.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- usvwin32.dll removed — stubbed in USVWinStubs.cs -->
+    <!-- usvwin32.dll removed — functions consolidated into RavenImaging.cs -->
     <None Update="2.ps1">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="3.ps1">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="MultiAreaScript.ips">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="PhotostatScript.ips">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Properties\Settings.settings">
@@ -83,18 +77,5 @@
     <None Update="test.tif">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="xLooseScript.ips">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="sutterfield.lic">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="callback.cs" />
-    <Compile Remove="Clipbrd.cs" />
-    <Compile Remove="RecoIPAPI.cs" />
-    <Compile Remove="KeyPicture.Common.cs" />
-    <Compile Remove="KeyPicture.Common.Designer.cs" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,6 @@
-// RavenImaging — drop-in replacement for Recogniform recoip.dll.
+// RavenImaging -- GDI+ image handle management and native imaging operations.
 // GDI+ Bitmap handle management + all Img* functions.
-// Threshold and bleed-through functions delegate to recoip_native.dll (x87 extended precision).
+// Threshold and bleed-through functions delegate to raven_native.dll (x87 extended precision).
 
 using System;
 using System.Collections.Generic;
@@ -11,7 +11,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 /// <summary>
-/// GDI+-backed replacements for Recogniform recoip.dll.
+/// GDI+-backed image operations with integer handle management.
 /// Integer handles map to <see cref="Bitmap"/> objects.
 /// </summary>
 public static class RavenImaging
@@ -37,59 +37,59 @@ public static class RavenImaging
 
     // ── Native DLL P/Invoke declarations ──
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "AdaptiveThresholdAverage")]
     private static extern void NativeAdaptiveThresholdAverage(
         byte[] gray, byte[] result, int w, int h, int blockW, int blockH, int contrast, int brightness);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "DynamicThresholdAverage")]
     private static extern void NativeDynamicThresholdAverage(
         byte[] gray, byte[] result, int w, int h, int blockW, int blockH, int contrast, int brightness);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RefineThreshold")]
     private static extern void NativeRefineThreshold(
         byte[] binary, byte[] gray, int w, int h, int tolerance);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveBleedThrough")]
     private static extern void NativeRemoveBleedThrough(
         byte[] bgr, int w, int h, int stride, int tolerance);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveBleedThroughGetBackground")]
     private static extern void NativeRemoveBleedThroughGetBackground(
         byte[] bgr, int w, int h, int stride,
         out int bgH, out int bgS, out int bgL, out int otsu);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveBleedThroughApplyRows")]
     private static extern void NativeRemoveBleedThroughApplyRows(
         byte[] bgr, int w, int h, int stride, int tolerance,
         int bgH, int bgS, int bgL, int startY, int endY);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "Despeckle")]
     private static extern int NativeDespeckle(
         byte[] buf, int stride, int w, int h, int maxW, int maxH);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveBlackWires")]
     private static extern void NativeRemoveBlackWires(
         byte[] buf, int stride, int w, int h);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveVerticalLines")]
     private static extern int NativeRemoveVerticalLines(
         byte[] buf, int stride, int w, int h, int minVLen, int maxVBreaks, int minBlack);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "AutoThreshold")]
     private static extern int NativeAutoThreshold(
         byte[] gray, int w, int h, int stride, int algo);
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "FindBlackBorder")]
     private static extern int NativeFindBlackBorder(
         byte[] buf, int stride, int w, int h, int bpp, int side, double minBlackPct, int maxHoles);
@@ -104,13 +104,13 @@ public static class RavenImaging
         public int maxHoles;
     }
 
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
+    [DllImport("raven_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "FindBlackBorderBatch")]
     private static extern void NativeFindBlackBorderBatch(
         byte[] buf, int stride, int w, int h, int bpp,
         int nCalls, [In] FBBCall[] calls, [Out] int[] results);
 
-    // ── Grayscale LUTs (Recogniform weights: R=0.30, G=0.59, B=0.11) ──
+    // ── Grayscale LUTs (NTSC weights: R=0.30, G=0.59, B=0.11) ──
 
     private static readonly byte[] _lutR = BuildLut(0.30);
     private static readonly byte[] _lutG = BuildLut(0.59);
@@ -180,7 +180,7 @@ public static class RavenImaging
             return _images.TryGetValue(handle, out var b) ? b : null;
     }
 
-    /// <summary>Internal accessor so USVWin can do direct pixel work on loaded images.</summary>
+    /// <summary>Internal accessor so DocumentOps can do direct pixel work on loaded images.</summary>
     internal static Bitmap GetBitmap(int handle) => Get(handle);
 
     /// <summary>Internal: store an externally-created bitmap and return a handle.</summary>
@@ -312,7 +312,22 @@ public static class RavenImaging
             bmp.PixelFormat == PixelFormat.Format1bppIndexed
                 ? (long)EncoderValue.CompressionCCITT4
                 : (long)EncoderValue.CompressionLZW);
-        bmp.Save(FileName, _tiffCodec, ep);
+
+        // Atomic tmp-then-move: write to a temp file first, then replace the
+        // target.  This prevents "file in use" errors when another process
+        // (e.g. Explorer preview, antivirus) has the destination open.
+        string tmpPath = Path.ChangeExtension(FileName, ".imgsavetmp");
+        try
+        {
+            if (File.Exists(tmpPath)) File.Delete(tmpPath);
+            bmp.Save(tmpPath, _tiffCodec, ep);
+            File.Move(tmpPath, FileName, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { }
+            throw;
+        }
     }
 
     public static void ImgSaveAsJpg(int ImageHandle, string FileName, int QFactor)
@@ -334,8 +349,26 @@ public static class RavenImaging
 
         var ep = new EncoderParameters(1);
         ep.Param[0] = new EncoderParameter(Encoder.Quality, (long)QFactor);
-        toSave.Save(FileName, _jpegCodec, ep);
-        if (disposeAfter) toSave.Dispose();
+
+        // Atomic tmp-then-move: write to a temp file first, then replace the
+        // target.  This prevents "file in use" errors when another process
+        // (e.g. Explorer preview, antivirus) has the destination open.
+        string tmpPath = Path.ChangeExtension(FileName, ".imgsavetmp");
+        try
+        {
+            if (File.Exists(tmpPath)) File.Delete(tmpPath);
+            toSave.Save(tmpPath, _jpegCodec, ep);
+            File.Move(tmpPath, FileName, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { }
+            throw;
+        }
+        finally
+        {
+            if (disposeAfter) toSave.Dispose();
+        }
     }
 
     // ── Dimensions ─────────────────────────────────────────────────────
@@ -919,7 +952,7 @@ public static class RavenImaging
     }
 
     /// <summary>
-    /// Adaptive threshold — decompiled from recoip.dll fcn.00a79fd8.
+    /// Adaptive threshold algorithm (Sobel edge magnitude + box-averaged gate).
     /// Algorithm: Sobel edge magnitude → box-averaged gate image → threshold gate → compare gray vs local mean.
     /// Fixed mode (c=40,b=230): 100% pixel-perfect match. Auto mode (c=-1,b=-1): 99.6% match
     /// (gap is GDI+ vs Delphi JPEG decoder difference, not algorithm error).
@@ -995,7 +1028,7 @@ public static class RavenImaging
     }
 
 
-    /// <summary>Extract grayscale from any Bitmap using Recogniform LUT weights.</summary>
+    /// <summary>Extract grayscale from any Bitmap using NTSC LUT weights.</summary>
     private static byte[] ExtractGrayscaleLut(Bitmap bmp)
     {
         int w = bmp.Width, h = bmp.Height;
@@ -1135,7 +1168,7 @@ public static class RavenImaging
     /// <summary>
     /// Remove bleed-through (show-through from page reverse) from a color image.
     /// Uses HSL histogram-based background detection and per-pixel lightness replacement
-    /// via recoip_native.dll with x87 extended-precision HSL conversion.
+    /// via raven_native.dll with x87 extended-precision HSL conversion.
     /// </summary>
     public static void ImgRemoveBleedThrough(int ImageHandle, int Tolerance)
     {
@@ -1815,10 +1848,10 @@ public static class RavenImaging
     }
 
     /// <summary>
-    /// GDI+-based grayscale loader. Recogniform-compatible (for comparison testing).
+    /// GDI+-based grayscale loader. Legacy GDI+ loader (for comparison testing).
     /// Use LoadImageAsGrayscaleDual for production (uses TurboJPEG).
     /// </summary>
-    [Obsolete("Recogniform-compatible. Use LoadImageAsGrayscaleDual for production.")]
+    [Obsolete("Legacy GDI+ loader. Use LoadImageAsGrayscaleDual for production.")]
     public static (byte[] grayLut, byte[] grayAvg, int width, int height) LoadImageAsGrayscaleDualGdi(string path)
     {
         using var temp = new Bitmap(path);
@@ -1972,8 +2005,7 @@ public static class RavenImaging
                 bmp.Save(tmpPath, _tiffCodec, encoderParams);
             }
 
-            if (File.Exists(outputPath)) File.Delete(outputPath);
-            File.Move(tmpPath, outputPath);
+            File.Move(tmpPath, outputPath, overwrite: true);
 
             var fi = new FileInfo(outputPath);
             return fi.Exists && fi.Length > 0;
@@ -1984,6 +2016,399 @@ public static class RavenImaging
             throw;
         }
     }
+
+    // ── Document operations (erase, line removal, deskew, image info) ────
+
+    // --- Structs needed by KeyPicture code that may still be referenced ---
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    public unsafe struct TiffRedactInfo
+    {
+        public int iCount;
+        public fixed uint iLeft[50];
+        public fixed uint iTop[50];
+        public fixed uint iRight[50];
+        public fixed uint iBottom[50];
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    public struct TiffPrintCropInfo
+    {
+        public int iLeft;
+        public int iTop;
+        public int iRight;
+        public int iBottom;
+        public int unknown_1;
+        public int unknown_2;
+        public int unknown_3;
+        public int unknown_4;
+    }
+
+    /// <summary>Read image dimensions from file header without loading pixel data.</summary>
+    public static int GetImageInfo(string InputFile, int Page, ref int Width, ref int Height)
+    {
+        try
+        {
+            using var fs = new FileStream(InputFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var img = Image.FromStream(fs, false, false);
+            Width = img.Width;
+            Height = img.Height;
+        }
+        catch
+        {
+            Width = 0;
+            Height = 0;
+        }
+        return 0;
+    }
+
+    /// <summary>Fill a rectangle with white (erase inside the box).</summary>
+    public static int EraseIn(string FileNameIn, string FileNameOut, short Left, short Top, short Right, short Bottom)
+    {
+        int h = ImgOpen(FileNameIn, 0);
+        int color = ImgGetBitsPixel(h) == 1 ? 1 : 255;
+        ImgDrawRectangle(h, Left, Top, Right - Left, Bottom - Top, color, true);
+        ImgSaveAsTif(h, FileNameOut, 5, 0);
+        ImgDelete(h);
+        return 0;
+    }
+
+    /// <summary>Fill everything outside a rectangle with white (erase outside the box).</summary>
+    public static int EraseOut(string FileNameIn, string FileNameOut, short Left, short Top, short Right, short Bottom)
+    {
+        int h = ImgOpen(FileNameIn, 0);
+        int w = ImgGetWidth(h);
+        int ht = ImgGetHeight(h);
+        int color = ImgGetBitsPixel(h) == 1 ? 1 : 255;
+
+        if (Top > 0)
+            ImgDrawRectangle(h, 0, 0, w, Top, color, true);
+        if (Bottom < ht)
+            ImgDrawRectangle(h, 0, Bottom, w, ht - Bottom, color, true);
+        if (Left > 0)
+            ImgDrawRectangle(h, 0, Top, Left, Bottom - Top, color, true);
+        if (Right < w)
+            ImgDrawRectangle(h, Right, Top, w - Right, Bottom - Top, color, true);
+
+        ImgSaveAsTif(h, FileNameOut, 5, 0);
+        ImgDelete(h);
+        return 0;
+    }
+
+    /// <summary>
+    /// Remove a vertical scanner-artifact line at the given column.
+    /// For each row, checks 3 pixels on each side of the band for black neighbors.
+    /// If none found, the band is erased to white. If neighbors exist, left untouched.
+    /// </summary>
+    public static int RemoveDirtyLine(string ImageFileName, int iPage, string OutputFileName, int MaxLineThickness, int Column)
+    {
+        int h = ImgOpen(ImageFileName, 0);
+        var bmp = GetBitmap(h);
+        if (bmp == null) { ImgDelete(h); return 1; }
+
+        int width = bmp.Width;
+        int height = bmp.Height;
+        if (Column < 0 || Column >= width) { ImgDelete(h); return 1; }
+
+        int leftBound = Math.Max(0, Column - MaxLineThickness);
+        int rightBound = Math.Min(width - 1, Column + MaxLineThickness);
+
+        if (bmp.PixelFormat == PixelFormat.Format1bppIndexed)
+            RemoveDirtyLine1bpp(bmp, width, height, leftBound, rightBound);
+        else
+            RemoveDirtyLine24bpp(bmp, width, height, leftBound, rightBound);
+
+        ImgSaveAsTif(h, OutputFileName, 5, 0);
+        ImgDelete(h);
+        return 0;
+    }
+
+    private static void RemoveDirtyLine1bpp(Bitmap bmp, int width, int height, int left, int right)
+    {
+        var rect = new Rectangle(0, 0, width, height);
+        var bd = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format1bppIndexed);
+        int stride = Math.Abs(bd.Stride);
+        var buf = new byte[stride * height];
+        Marshal.Copy(bd.Scan0, buf, 0, buf.Length);
+
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * stride;
+            int hits = 0;
+            for (int x = left - 3; x < left; x++)
+            {
+                if (x < 0) continue;
+                if ((buf[row + (x >> 3)] & (0x80 >> (x & 7))) == 0) hits++;
+            }
+            for (int x = right + 1; x <= right + 3; x++)
+            {
+                if (x >= width) break;
+                if ((buf[row + (x >> 3)] & (0x80 >> (x & 7))) == 0) hits++;
+            }
+            if (hits == 0)
+                for (int x = left; x <= right; x++)
+                    buf[row + (x >> 3)] |= (byte)(0x80 >> (x & 7));
+        }
+
+        Marshal.Copy(buf, 0, bd.Scan0, buf.Length);
+        bmp.UnlockBits(bd);
+    }
+
+    private static void RemoveDirtyLine24bpp(Bitmap bmp, int width, int height, int left, int right)
+    {
+        var rect = new Rectangle(0, 0, width, height);
+        var bd = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+        int stride = Math.Abs(bd.Stride);
+        var buf = new byte[stride * height];
+        Marshal.Copy(bd.Scan0, buf, 0, buf.Length);
+
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * stride;
+            int hits = 0;
+            for (int x = left - 3; x < left; x++)
+            {
+                if (x < 0) continue;
+                int off = row + x * 3;
+                if ((buf[off] + buf[off + 1] + buf[off + 2]) / 3 < 128) hits++;
+            }
+            for (int x = right + 1; x <= right + 3; x++)
+            {
+                if (x >= width) break;
+                int off = row + x * 3;
+                if ((buf[off] + buf[off + 1] + buf[off + 2]) / 3 < 128) hits++;
+            }
+            if (hits == 0)
+                for (int x = left; x <= right; x++)
+                {
+                    int off = row + x * 3;
+                    buf[off] = buf[off + 1] = buf[off + 2] = 255;
+                }
+        }
+
+        Marshal.Copy(buf, 0, bd.Scan0, buf.Length);
+        bmp.UnlockBits(bd);
+    }
+
+    /// <summary>
+    /// Detect and correct document skew using projection profile analysis.
+    /// Coarse-to-fine search: ±5° → ±0.5° → ±0.1° for sub-0.02° precision.
+    /// </summary>
+    public static int SKEWCORRECT(string InputFile, string OutputFile)
+    {
+        try
+        {
+            int h = ImgOpen(InputFile, 0);
+            var bmp = GetBitmap(h);
+            if (bmp == null) { ImgDelete(h); return 1; }
+
+            int w = bmp.Width, ht = bmp.Height;
+            float dpiX = bmp.HorizontalResolution, dpiY = bmp.VerticalResolution;
+            bool is1bpp = bmp.PixelFormat == PixelFormat.Format1bppIndexed;
+
+            double angle;
+            if (is1bpp)
+                angle = DetectSkewAngle1bpp(bmp, w, ht);
+            else
+                angle = DetectSkewAngle24bpp(bmp, w, ht);
+
+            if (Math.Abs(angle) < 0.05)
+            {
+                if (!string.Equals(InputFile, OutputFile, StringComparison.OrdinalIgnoreCase))
+                    ImgSaveAsTif(h, OutputFile, 5, 0);
+                ImgDelete(h);
+                return 0;
+            }
+
+            var src24 = new Bitmap(w, ht, PixelFormat.Format24bppRgb);
+            src24.SetResolution(dpiX, dpiY);
+            using (var g = Graphics.FromImage(src24))
+                g.DrawImage(bmp, 0, 0, w, ht);
+
+            ImgDelete(h);
+
+            var dst24 = new Bitmap(w, ht, PixelFormat.Format24bppRgb);
+            dst24.SetResolution(dpiX, dpiY);
+            using (var g = Graphics.FromImage(dst24))
+            {
+                g.Clear(Color.White);
+                g.TranslateTransform(w / 2f, ht / 2f);
+                g.RotateTransform(-(float)angle);
+                g.TranslateTransform(-w / 2f, -ht / 2f);
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.DrawImage(src24, 0, 0);
+            }
+            src24.Dispose();
+
+            Bitmap result;
+            if (is1bpp)
+            {
+                result = SkewThresholdTo1bpp(dst24);
+                result.SetResolution(dpiX, dpiY);
+                dst24.Dispose();
+            }
+            else
+            {
+                result = dst24;
+            }
+
+            int hResult = StoreBitmap(result);
+            ImgSaveAsTif(hResult, OutputFile, 5, 0);
+            ImgDelete(hResult);
+            return 0;
+        }
+        catch
+        {
+            return 1;
+        }
+    }
+
+    private static double DetectSkewAngle1bpp(Bitmap bmp, int width, int height)
+    {
+        var rect = new Rectangle(0, 0, width, height);
+        var bd = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format1bppIndexed);
+        int stride = Math.Abs(bd.Stride);
+        var buf = new byte[stride * height];
+        Marshal.Copy(bd.Scan0, buf, 0, buf.Length);
+        bmp.UnlockBits(bd);
+
+        int step = Math.Max(1, Math.Min(width, height) / 500);
+        var blackPixels = new List<(int x, int y)>();
+        for (int y = 0; y < height; y += step)
+        {
+            int rowOff = y * stride;
+            for (int x = 0; x < width; x += step)
+            {
+                if ((buf[rowOff + (x >> 3)] & (0x80 >> (x & 7))) == 0)
+                    blackPixels.Add((x, y));
+            }
+        }
+
+        return FindBestAngle(blackPixels, height);
+    }
+
+    private static double DetectSkewAngle24bpp(Bitmap bmp, int width, int height)
+    {
+        var rect = new Rectangle(0, 0, width, height);
+        var bd = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        int stride = Math.Abs(bd.Stride);
+        var buf = new byte[stride * height];
+        Marshal.Copy(bd.Scan0, buf, 0, buf.Length);
+        bmp.UnlockBits(bd);
+
+        int step = Math.Max(1, Math.Min(width, height) / 500);
+        var blackPixels = new List<(int x, int y)>();
+        for (int y = 0; y < height; y += step)
+        {
+            int rowOff = y * stride;
+            for (int x = 0; x < width; x += step)
+            {
+                int off = rowOff + x * 3;
+                if ((buf[off] + buf[off + 1] + buf[off + 2]) / 3 < 128)
+                    blackPixels.Add((x, y));
+            }
+        }
+
+        return FindBestAngle(blackPixels, height);
+    }
+
+    private static double FindBestAngle(List<(int x, int y)> blackPixels, int height)
+    {
+        if (blackPixels.Count < 50) return 0;
+
+        double bestAngle = 0, bestScore = 0;
+
+        for (double deg = -5.0; deg <= 5.0; deg += 0.5)
+        {
+            double score = ProjectionVariance(blackPixels, deg, height);
+            if (score > bestScore) { bestScore = score; bestAngle = deg; }
+        }
+
+        double mid = bestAngle;
+        for (double deg = mid - 0.5; deg <= mid + 0.5; deg += 0.1)
+        {
+            double score = ProjectionVariance(blackPixels, deg, height);
+            if (score > bestScore) { bestScore = score; bestAngle = deg; }
+        }
+
+        double fine = bestAngle;
+        for (double deg = fine - 0.1; deg <= fine + 0.1; deg += 0.02)
+        {
+            double score = ProjectionVariance(blackPixels, deg, height);
+            if (score > bestScore) { bestScore = score; bestAngle = deg; }
+        }
+
+        return bestAngle;
+    }
+
+    private static double ProjectionVariance(List<(int x, int y)> pixels, double angleDeg, int maxBucket)
+    {
+        double rad = angleDeg * Math.PI / 180.0;
+        double sinA = Math.Sin(rad);
+        double cosA = Math.Cos(rad);
+
+        int offset = maxBucket / 2;
+        int histLen = maxBucket * 2;
+        var hist = new int[histLen];
+
+        foreach (var (x, y) in pixels)
+        {
+            int bucket = (int)(y * cosA - x * sinA) + offset;
+            if (bucket >= 0 && bucket < histLen)
+                hist[bucket]++;
+        }
+
+        long sum = 0, sumSq = 0;
+        int count = 0;
+        for (int i = 0; i < histLen; i++)
+        {
+            if (hist[i] > 0)
+            {
+                sum += hist[i];
+                sumSq += (long)hist[i] * hist[i];
+                count++;
+            }
+        }
+        if (count == 0) return 0;
+        double mean = (double)sum / count;
+        return (double)sumSq / count - mean * mean;
+    }
+
+    private static Bitmap SkewThresholdTo1bpp(Bitmap src)
+    {
+        int w = src.Width, h = src.Height;
+        var dst = new Bitmap(w, h, PixelFormat.Format1bppIndexed);
+        dst.SetResolution(src.HorizontalResolution, src.VerticalResolution);
+
+        var sRect = new Rectangle(0, 0, w, h);
+        var sd = src.LockBits(sRect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+        var dd = dst.LockBits(sRect, ImageLockMode.WriteOnly, PixelFormat.Format1bppIndexed);
+        int sStride = Math.Abs(sd.Stride);
+        int dStride = Math.Abs(dd.Stride);
+        var sBuf = new byte[sStride * h];
+        var dBuf = new byte[dStride * h];
+        Marshal.Copy(sd.Scan0, sBuf, 0, sBuf.Length);
+
+        for (int y = 0; y < h; y++)
+        {
+            int sOff = y * sStride;
+            int dOff = y * dStride;
+            for (int x = 0; x < w; x++)
+            {
+                int idx = sOff + x * 3;
+                if ((sBuf[idx] + sBuf[idx + 1] + sBuf[idx + 2]) / 3 >= 128)
+                    dBuf[dOff + (x >> 3)] |= (byte)(0x80 >> (x & 7));
+            }
+        }
+
+        Marshal.Copy(dBuf, 0, dd.Scan0, dBuf.Length);
+        src.UnlockBits(sd);
+        dst.UnlockBits(dd);
+        return dst;
+    }
+
+    public static int COMBINETIFFS(string OutputFile, string AppendFile) => 0;
+    public static int VW_CombineMultiplePageTiffs(string File1, string File2, string Outputfile) => 0;
+    public static int VW_CombineMultipleTiffPages(string OutputFile, string AppendFile, int Mode) => 0;
 }
 
 
