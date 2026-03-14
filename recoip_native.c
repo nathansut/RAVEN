@@ -108,6 +108,19 @@ static long long *compute_integral(const unsigned char *data, int w, int h) {
     return integral;
 }
 
+/* Forward declarations for functions defined later */
+static void box_average_fast(const unsigned char *input, unsigned char *output,
+                              int w, int h, int blockW, int blockH);
+static void box_average_fast_par(const unsigned char *input, unsigned char *output,
+                                  int w, int h, int blockW, int blockH);
+static void sobel_magnitude_l1(const unsigned char *gray, unsigned char *sobel, int w, int h);
+#ifdef _OPENMP
+static void sobel_magnitude_l1_par(const unsigned char *gray, unsigned char *sobel, int w, int h);
+#define SOBEL_IMPL sobel_magnitude_l1_par
+#else
+#define SOBEL_IMPL sobel_magnitude_l1
+#endif
+
 /* ══════════════════════════════════════════════════════════════════════
  * Box average with x87 extended precision + banker's rounding
  * Matches DLL's 0xa41c08 (FPU CW 0x1332, FISTP for rounding)
@@ -156,19 +169,123 @@ void EXPORT BoxAverage_x87(const unsigned char *input, unsigned char *output,
  * ══════════════════════════════════════════════════════════════════════ */
 
 static void sobel_magnitude_l1(const unsigned char *gray, unsigned char *sobel, int w, int h) {
-    for (int y = 0; y < h; y++) {
-        int yp = y > 0 ? y - 1 : 0;
-        int yn = y < h - 1 ? y + 1 : h - 1;
-        for (int x = 0; x < w; x++) {
-            int xp = x > 0 ? x - 1 : 0;
-            int xn = x < w - 1 ? x + 1 : w - 1;
-            int tl = gray[yp*w+xp], tc = gray[yp*w+x], tr = gray[yp*w+xn];
-            int cl = gray[y *w+xp],                      cr = gray[y *w+xn];
-            int bl = gray[yn*w+xp], bc = gray[yn*w+x], br = gray[yn*w+xn];
+    if (h == 0 || w == 0) return;
+
+    /* Row 0: boundary row with clamped yp */
+    {
+        const unsigned char *rp = gray;           /* yp = 0 (clamped) */
+        const unsigned char *rc = gray;           /* y = 0 */
+        const unsigned char *rn = h > 1 ? gray + w : gray; /* yn */
+        /* x = 0 (boundary) */
+        {
+            int tl = rp[0], tc = rp[0], tr = rp[w > 1 ? 1 : 0];
+            int cl = rc[0],              cr = rc[w > 1 ? 1 : 0];
+            int bl = rn[0], bc = rn[0], br = rn[w > 1 ? 1 : 0];
             int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
             int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
             int mag = abs(gx) + abs(gy);
-            sobel[y*w+x] = (unsigned char)(mag < 255 ? mag : 255);
+            sobel[0] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+        /* x = 1..w-2 (interior columns) */
+        for (int x = 1; x < w - 1; x++) {
+            int tl = rp[x-1], tc = rp[x], tr = rp[x+1];
+            int cl = rc[x-1],              cr = rc[x+1];
+            int bl = rn[x-1], bc = rn[x], br = rn[x+1];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            sobel[x] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+        /* x = w-1 (boundary), only if w > 1 */
+        if (w > 1) {
+            int x = w - 1;
+            int tl = rp[x-1], tc = rp[x], tr = rp[x];
+            int cl = rc[x-1],              cr = rc[x];
+            int bl = rn[x-1], bc = rn[x], br = rn[x];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            sobel[x] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+    }
+
+    /* Rows 1..h-2: bulk interior with row-pointer pre-computation */
+    for (int y = 1; y < h - 1; y++) {
+        const unsigned char *rp = gray + (y - 1) * w;
+        const unsigned char *rc = gray + y * w;
+        const unsigned char *rn = gray + (y + 1) * w;
+        unsigned char *out = sobel + y * w;
+
+        /* x = 0 (left boundary) */
+        {
+            int tl = rp[0], tc = rp[0], tr = rp[1];
+            int cl = rc[0],              cr = rc[1];
+            int bl = rn[0], bc = rn[0], br = rn[1];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[0] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+
+        /* x = 1..w-2 (interior: no boundary checks) */
+        for (int x = 1; x < w - 1; x++) {
+            int tl = rp[x-1], tc = rp[x], tr = rp[x+1];
+            int cl = rc[x-1],              cr = rc[x+1];
+            int bl = rn[x-1], bc = rn[x], br = rn[x+1];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[x] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+
+        /* x = w-1 (right boundary) */
+        {
+            int x = w - 1;
+            int tl = rp[x-1], tc = rp[x], tr = rp[x];
+            int cl = rc[x-1],              cr = rc[x];
+            int bl = rn[x-1], bc = rn[x], br = rn[x];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[x] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+    }
+
+    /* Row h-1: boundary row with clamped yn */
+    if (h > 1) {
+        int y = h - 1;
+        const unsigned char *rp = gray + (y - 1) * w;
+        const unsigned char *rc = gray + y * w;
+        const unsigned char *rn = rc;  /* yn clamped to h-1 */
+        unsigned char *out = sobel + y * w;
+        /* x = 0 */
+        {
+            int tl = rp[0], tc = rp[0], tr = rp[w > 1 ? 1 : 0];
+            int cl = rc[0],              cr = rc[w > 1 ? 1 : 0];
+            int bl = rn[0], bc = rn[0], br = rn[w > 1 ? 1 : 0];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[0] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+        for (int x = 1; x < w - 1; x++) {
+            int tl = rp[x-1], tc = rp[x], tr = rp[x+1];
+            int cl = rc[x-1],              cr = rc[x+1];
+            int bl = rn[x-1], bc = rn[x], br = rn[x+1];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[x] = (unsigned char)(mag < 255 ? mag : 255);
+        }
+        if (w > 1) {
+            int x = w - 1;
+            int tl = rp[x-1], tc = rp[x], tr = rp[x];
+            int cl = rc[x-1],              cr = rc[x];
+            int bl = rn[x-1], bc = rn[x], br = rn[x];
+            int gx = (tr + 2*cr + br) - (tl + 2*cl + bl);
+            int gy = (bl + 2*bc + br) - (tl + 2*tc + tr);
+            int mag = abs(gx) + abs(gy);
+            out[x] = (unsigned char)(mag < 255 ? mag : 255);
         }
     }
 }
@@ -273,17 +390,16 @@ static void dynamic_threshold_on_gate(unsigned char *gate, int w, int h,
     if (threshold > 255) threshold = 255;
 
     unsigned char *filterGate = (unsigned char *)malloc(total);
-    box_average_x87(gate, filterGate, w, h, blockW, blockH);
+    box_average_fast(gate, filterGate, w, h, blockW, blockH);
 
     for (int i = 0; i < total; i++) {
-        int diff = (int)filterGate[i] - (int)gate[i];
+        unsigned char g = gate[i];
+        int diff = (int)filterGate[i] - (int)g;
         if (abs(diff) > threshold)
-            gate[i] = (unsigned char)(diff > 0 ? 0 : 255);
+            g = (unsigned char)(diff > 0 ? 0 : 255);
+        gate[i] = (unsigned char)(g > offset ? 255 : 0);
     }
     free(filterGate);
-
-    for (int i = 0; i < total; i++)
-        gate[i] = (unsigned char)(gate[i] > offset ? 255 : 0);
 }
 
 /* Test version: DynamicThreshold with overridable threshold */
@@ -303,17 +419,16 @@ static void dynamic_threshold_on_gate_ex(unsigned char *gate, int w, int h,
     }
 
     unsigned char *filterGate = (unsigned char *)malloc(total);
-    box_average_x87(gate, filterGate, w, h, blockW, blockH);
+    box_average_fast(gate, filterGate, w, h, blockW, blockH);
 
     for (int i = 0; i < total; i++) {
-        int diff = (int)filterGate[i] - (int)gate[i];
+        unsigned char g = gate[i];
+        int diff = (int)filterGate[i] - (int)g;
         if (abs(diff) > threshold)
-            gate[i] = (unsigned char)(diff > 0 ? 0 : 255);
+            g = (unsigned char)(diff > 0 ? 0 : 255);
+        gate[i] = (unsigned char)(g > offset ? 255 : 0);
     }
     free(filterGate);
-
-    for (int i = 0; i < total; i++)
-        gate[i] = (unsigned char)(gate[i] > offset ? 255 : 0);
 }
 
 /* AdaptiveThreshold with overridable DT threshold for testing */
@@ -337,7 +452,7 @@ void EXPORT AdaptiveThresholdTest(
     sobel_magnitude_l1(gray, sobelMag, w, h);
 
     unsigned char *gateImage = (unsigned char *)malloc(total);
-    box_average_x87(sobelMag, gateImage, w, h, blockW, blockH);
+    box_average_fast(sobelMag, gateImage, w, h, blockW, blockH);
     free(sobelMag);
 
     int gate;
@@ -352,7 +467,7 @@ void EXPORT AdaptiveThresholdTest(
     }
 
     unsigned char *filterImage = (unsigned char *)malloc(total);
-    box_average_x87(gray, filterImage, w, h, blockW + 2, blockH + 2);
+    box_average_fast(gray, filterImage, w, h, blockW + 2, blockH + 2);
 
     memcpy(result, gray, total);
     for (int i = 0; i < total; i++) {
@@ -403,7 +518,7 @@ void EXPORT DynamicThresholdDiag(
     for (int i = 0; i < 64; i++)
         out_params[3 + i] = (int)diffHist[i];
 
-    box_average_x87(gate, out_filterGate, w, h, blockW, blockH);
+    box_average_fast(gate, out_filterGate, w, h, blockW, blockH);
 
     for (int i = 0; i < total; i++) {
         int diff = (int)out_filterGate[i] - (int)gate[i];
@@ -440,20 +555,45 @@ void EXPORT AdaptiveThresholdAverage(
         if (invertedBrightness > 255) invertedBrightness = 255;
     }
 
-    /* 2. Sobel L1 edge magnitude */
+    /* 2. Sobel L1 edge magnitude (parallel rows when OMP available) */
     unsigned char *sobelMag = (unsigned char *)malloc(total);
-    sobel_magnitude_l1(gray, sobelMag, w, h);
+    SOBEL_IMPL(gray, sobelMag, w, h);
 
-    /* 3. Box average of Sobel → gateImage */
+    /* 3. Box average of Sobel → gateImage (parallel interior rows) */
     unsigned char *gateImage = (unsigned char *)malloc(total);
-    box_average_x87(sobelMag, gateImage, w, h, blockW, blockH);
+    box_average_fast_par(sobelMag, gateImage, w, h, blockW, blockH);
     free(sobelMag);
 
     /* 4. Contrast → gate threshold */
     int gate;
     if (contrast < 0 && contrast != -2) {
         gate = 128;
-        dynamic_threshold_on_gate(gateImage, w, h, blockW, blockH);
+        /* Inline DT-on-gate with parallel box avg */
+        {
+            int offset = otsu_threshold(gateImage, total);
+            long long diffHist[256];
+            difference_histogram(gateImage, w, h, diffHist);
+            int threshold = auto_threshold(diffHist);
+            if (threshold > 255) threshold = 255;
+            unsigned char *filterGate = (unsigned char *)malloc(total);
+            box_average_fast_par(gateImage, filterGate, w, h, blockW, blockH);
+
+            #ifdef _OPENMP
+            #pragma omp parallel for schedule(static)
+            #endif
+            for (int i = 0; i < total; i++) {
+                int diff = (int)filterGate[i] - (int)gateImage[i];
+                if (abs(diff) > threshold)
+                    gateImage[i] = (unsigned char)(diff > 0 ? 0 : 255);
+            }
+            free(filterGate);
+
+            #ifdef _OPENMP
+            #pragma omp parallel for schedule(static)
+            #endif
+            for (int i = 0; i < total; i++)
+                gateImage[i] = (unsigned char)(gateImage[i] > offset ? 255 : 0);
+        }
     } else if (contrast == -2) {
         gate = otsu_threshold(gateImage, total);
     } else {
@@ -463,44 +603,30 @@ void EXPORT AdaptiveThresholdAverage(
 
     /* 5. Box average of grayscale (wider window) → filterImage */
     unsigned char *filterImage = (unsigned char *)malloc(total);
-    box_average_x87(gray, filterImage, w, h, blockW + 2, blockH + 2);
+    box_average_fast_par(gray, filterImage, w, h, blockW + 2, blockH + 2);
 
-    /* 6. Gate + comparison → working copy */
-    memcpy(result, gray, total);
+    /* 6+7. Fused: gate comparison + post-binarize in one pass */
+    #ifdef _OPENMP
+    #pragma omp parallel for schedule(static)
+    #endif
     for (int i = 0; i < total; i++) {
+        unsigned char r = gray[i];
         if (gateImage[i] >= gate)
-            result[i] = (unsigned char)(result[i] < filterImage[i] ? 0 : 255);
+            r = (unsigned char)(r < filterImage[i] ? 0 : 255);
+        result[i] = (unsigned char)(r > invertedBrightness ? 255 : 0);
     }
     free(gateImage);
     free(filterImage);
-
-    /* 7. Post-binarize */
-    for (int i = 0; i < total; i++)
-        result[i] = (unsigned char)(result[i] > invertedBrightness ? 255 : 0);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
- * AdaptiveThresholdAverageOpt — optimized version (same algorithm, faster)
+ * box_average_fast — Interior-fast box average
  *
- * Optimizations vs AdaptiveThresholdAverage:
- *  1. box_average_fast: interior pixels use precomputed reciprocal (multiply
- *     instead of divide) — eliminates per-pixel x87 FDIV in hot interior path.
- *     Border strip still uses the full x87 division for accuracy at edges.
- *  2. OpenMP parallel Sobel: rows are independent, use all available cores.
- *  3. AT(auto,-1,-1): Otsu on gray computed once (reused for invertedBrightness
- *     and passed to gate), avoiding a second full scan.
- *
- * Output is bit-for-bit identical to AdaptiveThresholdAverage on the test
- * images benchmarked (3094×4314 JPEG). The reciprocal multiply in the interior
- * path gives the same result as division for the specific counts encountered
- * (7×7=49, 9×9=81) because x87 extended precision rounds identically there.
- * If you change blockW/blockH to unusual values, verify with a diff check.
+ * Border pixels use exact x87 div, interior uses precomputed reciprocal
+ * multiply (still x87 extended precision).
+ * For a 7x7 window on a 3094x4314 image, border = ~0.3% of pixels.
  * ══════════════════════════════════════════════════════════════════════ */
 
-/* Interior-fast box average: border pixels use exact x87 div, interior uses
- * precomputed reciprocal multiply (still x87 extended precision).
- * For a 7x7 window on a 3094×4314 image, border = ~0.3% of pixels.
- */
 static void box_average_fast(const unsigned char *input, unsigned char *output,
                               int w, int h, int blockW, int blockH)
 {
@@ -607,9 +733,6 @@ static void sobel_magnitude_l1_par(const unsigned char *gray, unsigned char *sob
         }
     }
 }
-#define SOBEL_IMPL sobel_magnitude_l1_par
-#else
-#define SOBEL_IMPL sobel_magnitude_l1
 #endif
 
 /* ── Parallel box_average (OMP interior rows) ─────────────────────── */
@@ -695,92 +818,6 @@ static void box_average_fast_par(const unsigned char *input, unsigned char *outp
     free(integral);
 }
 
-void EXPORT AdaptiveThresholdAverageOpt(
-    const unsigned char *gray, unsigned char *result,
-    int w, int h, int blockW, int blockH, int contrast, int brightness)
-{
-    int total = w * h;
-    set_fpu_extended();
-
-    /* 1. invertedBrightness */
-    int invertedBrightness;
-    if (brightness < 0)
-        invertedBrightness = otsu_threshold(gray, total);
-    else {
-        invertedBrightness = 255 - brightness;
-        if (invertedBrightness > 255) invertedBrightness = 255;
-    }
-
-    /* 2. Sobel L1 edge magnitude (parallel rows when OMP available) */
-    unsigned char *sobelMag = (unsigned char *)malloc(total);
-    SOBEL_IMPL(gray, sobelMag, w, h);
-
-    /* 3. Box average of Sobel → gateImage (parallel interior rows) */
-    unsigned char *gateImage = (unsigned char *)malloc(total);
-    box_average_fast_par(sobelMag, gateImage, w, h, blockW, blockH);
-    free(sobelMag);
-
-    /* 4. Contrast → gate threshold */
-    int gate;
-    if (contrast < 0 && contrast != -2) {
-        gate = 128;
-        /* Inline DT-on-gate with parallel box avg */
-        {
-            int offset = otsu_threshold(gateImage, total);
-            long long diffHist[256];
-            difference_histogram(gateImage, w, h, diffHist);
-            int threshold = auto_threshold(diffHist);
-            if (threshold > 255) threshold = 255;
-            unsigned char *filterGate = (unsigned char *)malloc(total);
-            box_average_fast_par(gateImage, filterGate, w, h, blockW, blockH);
-
-            #ifdef _OPENMP
-            #pragma omp parallel for schedule(static)
-            #endif
-            for (int i = 0; i < total; i++) {
-                int diff = (int)filterGate[i] - (int)gateImage[i];
-                if (abs(diff) > threshold)
-                    gateImage[i] = (unsigned char)(diff > 0 ? 0 : 255);
-            }
-            free(filterGate);
-
-            #ifdef _OPENMP
-            #pragma omp parallel for schedule(static)
-            #endif
-            for (int i = 0; i < total; i++)
-                gateImage[i] = (unsigned char)(gateImage[i] > offset ? 255 : 0);
-        }
-    } else if (contrast == -2) {
-        gate = otsu_threshold(gateImage, total);
-    } else {
-        gate = contrast;
-        if (gate > 255) gate = 255;
-    }
-
-    /* 5. Box average of grayscale (wider window) → filterImage (parallel) */
-    unsigned char *filterImage = (unsigned char *)malloc(total);
-    box_average_fast_par(gray, filterImage, w, h, blockW + 2, blockH + 2);
-
-    /* 6. Gate + comparison (parallel) */
-    memcpy(result, gray, total);
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static)
-    #endif
-    for (int i = 0; i < total; i++) {
-        if (gateImage[i] >= gate)
-            result[i] = (unsigned char)(result[i] < filterImage[i] ? 0 : 255);
-    }
-    free(gateImage);
-    free(filterImage);
-
-    /* 7. Post-binarize (parallel) */
-    #ifdef _OPENMP
-    #pragma omp parallel for schedule(static)
-    #endif
-    for (int i = 0; i < total; i++)
-        result[i] = (unsigned char)(result[i] > invertedBrightness ? 255 : 0);
-}
-
 /* ══════════════════════════════════════════════════════════════════════
  * Diagnostic: dump intermediate products for debugging
  * ══════════════════════════════════════════════════════════════════════ */
@@ -807,7 +844,7 @@ void EXPORT AdaptiveThresholdDiag(
     sobel_magnitude_l1(gray, out_sobel, w, h);
 
     /* 3. Box average Sobel → gateImage */
-    box_average_x87(out_sobel, out_gate, w, h, blockW, blockH);
+    box_average_fast(out_sobel, out_gate, w, h, blockW, blockH);
 
     /* 4. gate threshold */
     int gate;
@@ -825,7 +862,7 @@ void EXPORT AdaptiveThresholdDiag(
     out_params[1] = gate;
 
     /* 5. filterImage */
-    box_average_x87(gray, out_filter, w, h, blockW + 2, blockH + 2);
+    box_average_fast(gray, out_filter, w, h, blockW + 2, blockH + 2);
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -886,7 +923,7 @@ void EXPORT DynamicThresholdAverage(
     int effThreshold = 255 - brightness;
 
     unsigned char *boxMean = (unsigned char *)malloc(total);
-    box_average_x87(gray, boxMean, w, h, blockW, blockH);
+    box_average_fast(gray, boxMean, w, h, blockW, blockH);
 
     for (int i = 0; i < total; i++) {
         int pixel = gray[i];
@@ -972,107 +1009,6 @@ static void rgb_to_hsl(int R, int G, int B, double *H, double *S, double *L) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
- * RemoveBleedThrough
- *
- * Input/Output: bgr[h * stride] — 24bpp BGR pixel buffer (modified in place)
- * ══════════════════════════════════════════════════════════════════════ */
-
-void EXPORT RemoveBleedThrough(
-    unsigned char *bgr, int w, int h, int stride, int tolerance)
-{
-    set_fpu_extended();
-
-    /* Step 1: Build lightness histogram */
-    long long lHist[256];
-    memset(lHist, 0, sizeof(lHist));
-    int total = w * h;
-
-    for (int y = 0; y < h; y++) {
-        unsigned char *row = bgr + y * stride;
-        for (int x = 0; x < w; x++) {
-            int bv = row[x*3], gv = row[x*3+1], rv = row[x*3+2];
-            double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
-            float f255 = 255.0f;
-            int li = bankers_round((long double)pL * (long double)f255);
-            if (li < 0) li = 0; if (li > 255) li = 255;
-            lHist[li]++;
-        }
-    }
-
-    /* Step 2: Otsu threshold on lightness */
-    long long sumAll = 0;
-    for (int i = 0; i < 256; i++) sumAll += (long long)i * lHist[i];
-    long long sumB = 0, wB = 0;
-    double maxVar = 0; int medianThreshold = 0;
-    for (int t = 0; t < 256; t++) {
-        wB += lHist[t]; if (wB == 0) continue;
-        long long wF = total - wB; if (wF == 0) break;
-        sumB += (long long)t * lHist[t];
-        double mB = (double)sumB / (double)wB;
-        double mF = (double)(sumAll - sumB) / (double)wF;
-        double d = mB - mF;
-        double v = (double)wB * (double)wF * d * d;
-        if (v > maxVar) { maxVar = v; medianThreshold = t; }
-    }
-
-    /* Step 3: Accumulate HSL histograms for bright pixels */
-    long long histH[256], histS[256], histL[256];
-    memset(histH, 0, sizeof(histH));
-    memset(histS, 0, sizeof(histS));
-    memset(histL, 0, sizeof(histL));
-
-    for (int y = 0; y < h; y++) {
-        unsigned char *row = bgr + y * stride;
-        for (int x = 0; x < w; x++) {
-            int bv = row[x*3], gv = row[x*3+1], rv = row[x*3+2];
-            double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
-            float f255 = 255.0f;
-            int li = bankers_round((long double)pL * (long double)f255);
-            if (li < medianThreshold) continue;
-            int si = bankers_round((long double)pS * (long double)f255);
-            int hi = bankers_round((long double)pH * (long double)f255);
-            if (li >= 0 && li <= 255) histL[li]++;
-            if (si >= 0 && si <= 255) histS[si]++;
-            if (hi >= 0 && hi <= 255) histH[hi]++;
-        }
-    }
-
-    /* Step 4: Mode of each histogram → background color */
-    int bestH=0, bestS=0, bestL=0;
-    long long bHc=0, bSc=0, bLc=0;
-    for (int i = 0; i < 256; i++) {
-        if (histH[i] > bHc) { bHc = histH[i]; bestH = i; }
-        if (histS[i] > bSc) { bSc = histS[i]; bestS = i; }
-        if (histL[i] > bLc) { bLc = histL[i]; bestL = i; }
-    }
-
-    float f255 = 255.0f;
-    double bgH = (double)((long double)bestH / (long double)f255);
-    double bgS = (double)((long double)bestS / (long double)f255);
-    double bgL = (double)((long double)bestL / (long double)f255);
-    double lThreshold = ((255.0 - tolerance) / 255.0) * bgL;
-
-    /* Step 5: Process each pixel */
-    for (int y = 0; y < h; y++) {
-        unsigned char *row = bgr + y * stride;
-        for (int x = 0; x < w; x++) {
-            int bv = row[x*3], gv = row[x*3+1], rv = row[x*3+2];
-            double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
-            if (fabs(pS - bgS) >= 0.15) continue;
-            if (fabs(pH - bgH) >= 0.08) continue;
-            if (bgL < pL) continue;
-            if (lThreshold > pL) continue;
-            unsigned char nR, nG, nB;
-            hsl_to_rgb(pH, pS, bgL, &nR, &nG, &nB);
-            row[x*3] = nB; row[x*3+1] = nG; row[x*3+2] = nR;
-        }
-    }
-}
-
-/* ══════════════════════════════════════════════════════════════════════
  * RemoveBleedThroughFast — optimized version
  *
  * Same algorithm as RemoveBleedThrough but:
@@ -1115,13 +1051,63 @@ static void init_lindex_lut(void) {
     g_lindex_init = 1;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * Fast HSL helpers — standard double math, no x87 long double overhead.
+ * Accepts minor rounding differences vs the x87 versions.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+static void fast_rgb_to_hsl(int R, int G, int B, double *H, double *S, double *L) {
+    static const double inv255 = 1.0 / 255.0;
+    double rf = R * inv255, gf = G * inv255, bf = B * inv255;
+    double cMax = rf > gf ? (rf > bf ? rf : bf) : (gf > bf ? gf : bf);
+    double cMin = rf < gf ? (rf < bf ? rf : bf) : (gf < bf ? gf : bf);
+    double Lv = (cMax + cMin) * 0.5;
+    if (cMax == cMin) { *H = 0; *S = 0; *L = Lv; return; }
+    double delta = cMax - cMin;
+    *S = Lv < 0.5 ? delta / (cMax + cMin) : delta / (2.0 - cMax - cMin);
+    double Hv;
+    if (rf == cMax)      Hv = (gf - bf) / delta;
+    else if (gf == cMax) Hv = (bf - rf) / delta + 2.0;
+    else                 Hv = (rf - gf) / delta + 4.0;
+    Hv /= 6.0;
+    if (Hv < 0.0) Hv += 1.0;
+    *H = Hv; *L = Lv;
+}
+
+static double fast_hue_to_rgb(double p, double q, double t) {
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (6.0 * t < 1.0) return p + (q - p) * 6.0 * t;
+    if (2.0 * t < 1.0) return q;
+    if (3.0 * t < 2.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+    return p;
+}
+
+static void fast_hsl_to_rgb(double H, double S, double L,
+                             unsigned char *R, unsigned char *G, unsigned char *B) {
+    if (S == 0.0) {
+        int v = (int)(L * 255.0 + 0.5);
+        if (v < 0) v = 0; if (v > 255) v = 255;
+        *R = *G = *B = (unsigned char)v;
+        return;
+    }
+    double q = L < 0.5 ? L * (1.0 + S) : L + S - L * S;
+    double p = 2.0 * L - q;
+    int ri = (int)(fast_hue_to_rgb(p, q, H + 1.0/3.0) * 255.0 + 0.5);
+    int gi = (int)(fast_hue_to_rgb(p, q, H) * 255.0 + 0.5);
+    int bi = (int)(fast_hue_to_rgb(p, q, H - 1.0/3.0) * 255.0 + 0.5);
+    if (ri < 0) ri = 0; if (ri > 255) ri = 255;
+    if (gi < 0) gi = 0; if (gi > 255) gi = 255;
+    if (bi < 0) bi = 0; if (bi > 255) bi = 255;
+    *R = (unsigned char)ri; *G = (unsigned char)gi; *B = (unsigned char)bi;
+}
+
 /* Split version: compute background color only (passes 1+2).
  * Returns background H/S/L as integer indices (0-255) and Otsu threshold. */
 void EXPORT RemoveBleedThroughGetBackground(
     const unsigned char *bgr, int w, int h, int stride,
     int *outBgH, int *outBgS, int *outBgL, int *outOtsu)
 {
-    set_fpu_extended();
     init_lindex_lut();
     int total = w * h;
 
@@ -1169,10 +1155,9 @@ void EXPORT RemoveBleedThroughGetBackground(
             int li = g_lindex_lut[cMax][cMin];
             if (li < medianThreshold) continue;
             double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
-            float f255 = 255.0f;
-            int si = bankers_round((long double)pS * (long double)f255);
-            int hi = bankers_round((long double)pH * (long double)f255);
+            fast_rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
+            int si = (int)(pS * 255.0 + 0.5);
+            int hi = (int)(pH * 255.0 + 0.5);
             if (li >= 0 && li <= 255) histL2[li]++;
             if (si >= 0 && si <= 255) histS[si]++;
             if (hi >= 0 && hi <= 255) histH[hi]++;
@@ -1196,13 +1181,11 @@ void EXPORT RemoveBleedThroughApplyRows(
     unsigned char *bgr, int w, int h, int stride, int tolerance,
     int bgH_idx, int bgS_idx, int bgL_idx, int startY, int endY)
 {
-    set_fpu_extended();
     init_lindex_lut();
 
-    float f255 = 255.0f;
-    double bgH = (double)((long double)bgH_idx / (long double)f255);
-    double bgS = (double)((long double)bgS_idx / (long double)f255);
-    double bgL = (double)((long double)bgL_idx / (long double)f255);
+    double bgH = bgH_idx / 255.0;
+    double bgS = bgS_idx / 255.0;
+    double bgL = bgL_idx / 255.0;
     double lThreshold = ((255.0 - tolerance) / 255.0) * bgL;
 
     int lMinIdx = (int)(lThreshold * 255.0);
@@ -1219,22 +1202,27 @@ void EXPORT RemoveBleedThroughApplyRows(
             if (li < lMinIdx || li > lMaxIdx + 1) continue;
 
             double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
+            fast_rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
             if (fabs(pS - bgS) >= 0.15) continue;
             if (fabs(pH - bgH) >= 0.08) continue;
             if (bgL < pL) continue;
             if (lThreshold > pL) continue;
             unsigned char nR, nG, nB;
-            hsl_to_rgb(pH, pS, bgL, &nR, &nG, &nB);
+            fast_hsl_to_rgb(pH, pS, bgL, &nR, &nG, &nB);
             row[x*3] = nB; row[x*3+1] = nG; row[x*3+2] = nR;
         }
     }
 }
 
-void EXPORT RemoveBleedThroughFast(
+/* ══════════════════════════════════════════════════════════════════════
+ * RemoveBleedThrough
+ *
+ * Uses fast double-precision HSL helpers and integer LUT for lightness.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+void EXPORT RemoveBleedThrough(
     unsigned char *bgr, int w, int h, int stride, int tolerance)
 {
-    set_fpu_extended();
     init_lindex_lut();
     int total = w * h;
 
@@ -1268,8 +1256,7 @@ void EXPORT RemoveBleedThroughFast(
         if (v > maxVar) { maxVar = v; medianThreshold = t; }
     }
 
-    /* Pass 2: Accumulate HSL histograms for bright pixels (L_index > Otsu).
-     * Full HSL needed here for H and S histograms. */
+    /* Pass 2: Accumulate HSL histograms for bright pixels using fast double math */
     long long histH[256], histS[256], histL[256];
     memset(histH, 0, sizeof(histH));
     memset(histS, 0, sizeof(histS));
@@ -1282,20 +1269,18 @@ void EXPORT RemoveBleedThroughFast(
             int cMax = rv > gv ? (rv > bv ? rv : bv) : (gv > bv ? gv : bv);
             int cMin = rv < gv ? (rv < bv ? rv : bv) : (gv < bv ? gv : bv);
             int li = g_lindex_lut[cMax][cMin];
-            if (li < medianThreshold) continue;  /* strict: matching DLL's > not >= */
-            /* Only compute full HSL for bright pixels */
+            if (li < medianThreshold) continue;
             double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
-            float f255 = 255.0f;
-            int si = bankers_round((long double)pS * (long double)f255);
-            int hi = bankers_round((long double)pH * (long double)f255);
+            fast_rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
+            int si = (int)(pS * 255.0 + 0.5);
+            int hi = (int)(pH * 255.0 + 0.5);
             if (li >= 0 && li <= 255) histL[li]++;
             if (si >= 0 && si <= 255) histS[si]++;
             if (hi >= 0 && hi <= 255) histH[hi]++;
         }
     }
 
-    /* Mode of each histogram → background color */
+    /* Mode of each histogram -> background color */
     int bestH=0, bestS=0, bestL=0;
     long long bHc=0, bSc=0, bLc=0;
     for (int i = 0; i < 256; i++) {
@@ -1304,38 +1289,33 @@ void EXPORT RemoveBleedThroughFast(
         if (histL[i] > bLc) { bLc = histL[i]; bestL = i; }
     }
 
-    float f255 = 255.0f;
-    double bgH = (double)((long double)bestH / (long double)f255);
-    double bgS = (double)((long double)bestS / (long double)f255);
-    double bgL = (double)((long double)bestL / (long double)f255);
+    double bgH = bestH / 255.0;
+    double bgS = bestS / 255.0;
+    double bgL = bestL / 255.0;
     double lThreshold = ((255.0 - tolerance) / 255.0) * bgL;
 
-    /* Precompute L_index range for qualifying pixels.
-     * Qualifying: lThreshold <= L <= bgL, where L = L_index/255.0
-     * So: L_index >= ceil(lThreshold*255) and L_index <= bestL */
-    int lMinIdx = (int)(lThreshold * 255.0);  /* conservative lower bound */
+    int lMinIdx = (int)(lThreshold * 255.0);
     if (lMinIdx < 0) lMinIdx = 0;
     int lMaxIdx = bestL;
 
-    /* Pass 3: Process qualifying pixels — only compute HSL for those in L range */
+    /* Pass 3: Process qualifying pixels using fast double HSL */
     for (int y = 0; y < h; y++) {
         unsigned char *row = bgr + y * stride;
         for (int x = 0; x < w; x++) {
             int bv = row[x*3], gv = row[x*3+1], rv = row[x*3+2];
-            /* Quick L_index filter: skip pixels clearly outside range */
             int cMax = rv > gv ? (rv > bv ? rv : bv) : (gv > bv ? gv : bv);
             int cMin = rv < gv ? (rv < bv ? rv : bv) : (gv < bv ? gv : bv);
             int li = g_lindex_lut[cMax][cMin];
-            if (li < lMinIdx || li > lMaxIdx + 1) continue;  /* +1 for rounding margin */
+            if (li < lMinIdx || li > lMaxIdx + 1) continue;
 
             double pH, pS, pL;
-            rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
+            fast_rgb_to_hsl(rv, gv, bv, &pH, &pS, &pL);
             if (fabs(pS - bgS) >= 0.15) continue;
             if (fabs(pH - bgH) >= 0.08) continue;
             if (bgL < pL) continue;
             if (lThreshold > pL) continue;
             unsigned char nR, nG, nB;
-            hsl_to_rgb(pH, pS, bgL, &nR, &nG, &nB);
+            fast_hsl_to_rgb(pH, pS, bgL, &nR, &nG, &nB);
             row[x*3] = nB; row[x*3+1] = nG; row[x*3+2] = nR;
         }
     }
@@ -1448,7 +1428,7 @@ void EXPORT RefineThreshold(
 
     /* Step 1: BoxAverage(gray, 3, 3) → smoothed, then Sobel → gradient */
     unsigned char *smoothed = (unsigned char *)malloc(total);
-    box_average_x87(gray, smoothed, w, h, 3, 3);
+    box_average_fast(gray, smoothed, w, h, 3, 3);
     unsigned char *gradient = (unsigned char *)malloc(total);
     sobel_magnitude_l1(smoothed, gradient, w, h);
     free(smoothed);
@@ -1460,6 +1440,8 @@ void EXPORT RefineThreshold(
     int stackCap = 65536;
     int *stack = (int *)malloc(stackCap * sizeof(int));
 
+    int wm1 = w - 1, hm1 = h - 1;
+
     for (int col = 0; col < w; col++) {
         for (int row = 0; row < h; row++) {
             int startIdx = row * w + col;
@@ -1469,18 +1451,21 @@ void EXPORT RefineThreshold(
             visited[startIdx] = 1;
 
             /* DFS flood-fill to discover CC and compute edge stats */
+            /* Stack stores packed (x,y): (y << 16) | x */
             int stackTop = 0;
-            double edgeSum = 0;
+            long edgeSum = 0;
             int edgeCount = 0;
 
-            stack[stackTop++] = startIdx;
+            stack[stackTop++] = (row << 16) | col;
 
             while (stackTop > 0) {
-                int idx = stack[--stackTop];
-                int x = idx % w, y = idx / w;
+                int packed = stack[--stackTop];
+                int x = packed & 0xFFFF;
+                int y = (unsigned)packed >> 16;
+                int idx = y * w + x;
 
                 /* IsBorder: image edge OR any 4-connected neighbor differs */
-                int isEdge = (x == 0 || y == 0 || x == w-1 || y == h-1 ||
+                int isEdge = (x == 0 || y == 0 || x == wm1 || y == hm1 ||
                               binary[idx-1] != pixelColor ||
                               binary[idx+1] != pixelColor ||
                               binary[idx-w] != pixelColor ||
@@ -1497,15 +1482,15 @@ void EXPORT RefineThreshold(
                         stackCap *= 2;
                         stack = (int *)realloc(stack, stackCap * sizeof(int));
                     }
-                    stack[stackTop++] = idx - 1;
+                    stack[stackTop++] = (y << 16) | (x - 1);
                 }
-                if (x < w-1 && !visited[idx+1] && binary[idx+1] == pixelColor) {
+                if (x < wm1 && !visited[idx+1] && binary[idx+1] == pixelColor) {
                     visited[idx+1] = 1;
                     if (stackTop >= stackCap) {
                         stackCap *= 2;
                         stack = (int *)realloc(stack, stackCap * sizeof(int));
                     }
-                    stack[stackTop++] = idx + 1;
+                    stack[stackTop++] = (y << 16) | (x + 1);
                 }
                 if (y > 0 && !visited[idx-w] && binary[idx-w] == pixelColor) {
                     visited[idx-w] = 1;
@@ -1513,20 +1498,20 @@ void EXPORT RefineThreshold(
                         stackCap *= 2;
                         stack = (int *)realloc(stack, stackCap * sizeof(int));
                     }
-                    stack[stackTop++] = idx - w;
+                    stack[stackTop++] = ((y - 1) << 16) | x;
                 }
-                if (y < h-1 && !visited[idx+w] && binary[idx+w] == pixelColor) {
+                if (y < hm1 && !visited[idx+w] && binary[idx+w] == pixelColor) {
                     visited[idx+w] = 1;
                     if (stackTop >= stackCap) {
                         stackCap *= 2;
                         stack = (int *)realloc(stack, stackCap * sizeof(int));
                     }
-                    stack[stackTop++] = idx + w;
+                    stack[stackTop++] = ((y + 1) << 16) | x;
                 }
             }
 
             /* Flip if low contrast: edgeCount > 0 AND avgGrad < tolerance */
-            if (edgeCount > 0 && edgeSum / edgeCount < tolerance) {
+            if (edgeCount > 0 && edgeSum < (long)tolerance * edgeCount) {
                 unsigned char targetColor = (pixelColor == 0) ? 255 : 0;
                 fillcc2(binary, fillBitmap, w, h, col, row, targetColor);
             }
@@ -1549,40 +1534,68 @@ void EXPORT RefineThreshold(
  * are set to white.
  * ══════════════════════════════════════════════════════════════════════ */
 
-/* Single despeckle pass: scan row-major, full 8-conn flood fill from each
- * unvisited black seed using CURRENT buf state.  Small CCs (bbox ≤ maxW×maxH)
- * are removed immediately (inline update).  Large CCs are kept; their pixels
- * are marked visited to avoid redundant re-traversal within this pass.
- * Returns number of CCs removed. */
+/* Single despeckle pass — optimized with packed x,y coords, generation
+ * counter, row indexing, byte-level skip, split flood fill, precomputed
+ * row offsets, and unsigned bounds checks.
+ * Returns number of CCs removed.  Sets *pixelsChanged nonzero if any buf
+ * byte was actually modified during erasure. */
 static int despeckle_single_pass(unsigned char *buf, int stride, int w, int h,
                                  int maxW, int maxH,
-                                 unsigned char *visited,
+                                 unsigned char *visited, unsigned char generation,
                                  int **pStack, int *stackCap,
-                                 int **pComp,  int *compCap)
+                                 int **pComp,  int *compCap,
+                                 const int *activeRows, int activeRowCount,
+                                 int *pixelsChanged)
 {
     int removed = 0;
     int *stack = *pStack;
     int *comp  = *pComp;
     int sCap = *stackCap, cCap = *compCap;
+    int changed = 0;
+    const unsigned int uw = (unsigned int)w;
+    const unsigned int uh = (unsigned int)h;
+    const int byteW = (w + 7) >> 3;
 
-    for (int y = 0; y < h; y++) {
+/* Macro: try neighbor at (visited-index ni, buf-row br, pixel-x nx, packed-coord pc) */
+#define DS_TRY(ni, br, nx, pc) \
+    do { \
+        if (visited[ni] != generation && \
+            (buf[(br) + ((nx) >> 3)] & (0x80 >> ((nx) & 7))) == 0) { \
+            visited[ni] = generation; \
+            if (stackTop >= sCap) { \
+                sCap *= 2; \
+                stack = (int *)realloc(stack, sCap * sizeof(int)); \
+                *pStack = stack; *stackCap = sCap; \
+            } \
+            stack[stackTop++] = (pc); \
+        } \
+    } while(0)
+
+    for (int ri = 0; ri < activeRowCount; ri++) {
+        int y = activeRows[ri];
         int rowOff = y * stride;
-        for (int x = 0; x < w; x++) {
-            if ((buf[rowOff + (x >> 3)] & (0x80 >> (x & 7))) != 0) continue;
-            int idx = y * w + x;
-            if (visited[idx]) continue;
+        for (int bIdx = 0; bIdx < byteW; bIdx++) {
+            if (buf[rowOff + bIdx] == 0xFF) continue; /* skip all-white byte */
+            int xBase = bIdx << 3;
+            int xEnd = xBase + 8;
+            if (xEnd > w) xEnd = w;
+            for (int x = xBase; x < xEnd; x++) {
+                if ((buf[rowOff + (x >> 3)] & (0x80 >> (x & 7))) != 0) continue;
+                int idx = y * w + x;
+                if (visited[idx] == generation) continue;
 
-            int compSize = 0, stackTop = 0;
-            stack[stackTop++] = idx;
-            visited[idx] = 1;
-            int minX = x, maxX2 = x, minY = y, maxY2 = y;
-            int tooLarge = 0;
+                /* Phase 1: flood fill tracking bbox + component list */
+                int compSize = 0, stackTop = 0;
+                stack[stackTop++] = (y << 16) | x;
+                visited[idx] = generation;
+                int minX = x, maxX2 = x, minY = y, maxY2 = y;
+                int tooLarge = 0;
 
-            while (stackTop > 0) {
-                int ci = stack[--stackTop];
-                int cy = ci / w, cx = ci % w;
+                while (stackTop > 0) {
+                    int ci = stack[--stackTop];
+                    int cx = ci & 0xFFFF;
+                    int cy = (unsigned)ci >> 16;
 
-                if (!tooLarge) {
                     if (compSize >= cCap) {
                         cCap *= 2;
                         comp = (int *)realloc(comp, cCap * sizeof(int));
@@ -1593,41 +1606,88 @@ static int despeckle_single_pass(unsigned char *buf, int stride, int w, int h,
                     if (cx > maxX2) maxX2 = cx;
                     if (cy < minY) minY = cy;
                     if (cy > maxY2) maxY2 = cy;
-                    if (maxX2 - minX >= maxW || maxY2 - minY >= maxH)
+                    if (maxX2 - minX >= maxW || maxY2 - minY >= maxH) {
                         tooLarge = 1;
-                }
+                        break;
+                    }
 
-                for (int dy = -1; dy <= 1; dy++) {
-                    int ny = cy + dy;
-                    if (ny < 0 || ny >= h) continue;
-                    int nRow = ny * stride;
-                    for (int dx = -1; dx <= 1; dx++) {
-                        if ((dx | dy) == 0) continue;
-                        int nx = cx + dx;
-                        if (nx < 0 || nx >= w) continue;
-                        int ni = ny * w + nx;
-                        if (visited[ni]) continue;
-                        if ((buf[nRow + (nx >> 3)] & (0x80 >> (nx & 7))) != 0) continue;
-                        visited[ni] = 1;
-                        if (stackTop >= sCap) {
-                            sCap *= 2;
-                            stack = (int *)realloc(stack, sCap * sizeof(int));
-                            *pStack = stack; *stackCap = sCap;
-                        }
-                        stack[stackTop++] = ni;
+                    /* Precomputed row offsets for 8 neighbors */
+                    int viC = cy * (int)uw;
+                    int brC = cy * stride;
+                    int cyM1 = cy - 1, cyP1 = cy + 1;
+                    int viM = viC - (int)uw, brM = brC - stride;
+                    int viP = viC + (int)uw, brP = brC + stride;
+                    int cxM1 = cx - 1, cxP1 = cx + 1;
+                    int hasUp    = (unsigned)cyM1 < uh;
+                    int hasDown  = (unsigned)cyP1 < uh;
+                    int hasLeft  = (unsigned)cxM1 < uw;
+                    int hasRight = (unsigned)cxP1 < uw;
+
+                    if (hasUp) {
+                        if (hasLeft)  DS_TRY(viM+cxM1, brM, cxM1, (cyM1<<16)|cxM1);
+                                      DS_TRY(viM+cx,   brM, cx,   (cyM1<<16)|cx);
+                        if (hasRight) DS_TRY(viM+cxP1, brM, cxP1, (cyM1<<16)|cxP1);
+                    }
+                    if (hasLeft)  DS_TRY(viC+cxM1, brC, cxM1, (cy<<16)|cxM1);
+                    if (hasRight) DS_TRY(viC+cxP1, brC, cxP1, (cy<<16)|cxP1);
+                    if (hasDown) {
+                        if (hasLeft)  DS_TRY(viP+cxM1, brP, cxM1, (cyP1<<16)|cxM1);
+                                      DS_TRY(viP+cx,   brP, cx,   (cyP1<<16)|cx);
+                        if (hasRight) DS_TRY(viP+cxP1, brP, cxP1, (cyP1<<16)|cxP1);
                     }
                 }
-            }
 
-            if (!tooLarge) {
-                for (int i = 0; i < compSize; i++) {
-                    int py = comp[i] / w, px = comp[i] % w;
-                    buf[py * stride + (px >> 3)] |= (unsigned char)(0x80 >> (px & 7));
+                /* Phase 2: if tooLarge, continue flood fill just marking visited */
+                if (tooLarge) {
+                    while (stackTop > 0) {
+                        int ci = stack[--stackTop];
+                        int cx2 = ci & 0xFFFF;
+                        int cy2 = (unsigned)ci >> 16;
+
+                        int viC = cy2 * (int)uw;
+                        int brC = cy2 * stride;
+                        int cyM1 = cy2 - 1, cyP1 = cy2 + 1;
+                        int viM = viC - (int)uw, brM = brC - stride;
+                        int viP = viC + (int)uw, brP = brC + stride;
+                        int cxM1 = cx2 - 1, cxP1 = cx2 + 1;
+                        int hasUp    = (unsigned)cyM1 < uh;
+                        int hasDown  = (unsigned)cyP1 < uh;
+                        int hasLeft  = (unsigned)cxM1 < uw;
+                        int hasRight = (unsigned)cxP1 < uw;
+
+                        if (hasUp) {
+                            if (hasLeft)  DS_TRY(viM+cxM1, brM, cxM1, (cyM1<<16)|cxM1);
+                                          DS_TRY(viM+cx2,  brM, cx2,  (cyM1<<16)|cx2);
+                            if (hasRight) DS_TRY(viM+cxP1, brM, cxP1, (cyM1<<16)|cxP1);
+                        }
+                        if (hasLeft)  DS_TRY(viC+cxM1, brC, cxM1, (cy2<<16)|cxM1);
+                        if (hasRight) DS_TRY(viC+cxP1, brC, cxP1, (cy2<<16)|cxP1);
+                        if (hasDown) {
+                            if (hasLeft)  DS_TRY(viP+cxM1, brP, cxM1, (cyP1<<16)|cxM1);
+                                          DS_TRY(viP+cx2,  brP, cx2,  (cyP1<<16)|cx2);
+                            if (hasRight) DS_TRY(viP+cxP1, brP, cxP1, (cyP1<<16)|cxP1);
+                        }
+                    }
                 }
-                removed++;
+
+                /* Erase small CC using component list */
+                if (!tooLarge) {
+                    for (int i = 0; i < compSize; i++) {
+                        int px = comp[i] & 0xFFFF;
+                        int py = (unsigned)comp[i] >> 16;
+                        int byteOff = py * stride + (px >> 3);
+                        unsigned char mask = (unsigned char)(0x80 >> (px & 7));
+                        unsigned char old = buf[byteOff];
+                        buf[byteOff] = old | mask;
+                        if (old != (old | mask)) changed = 1;
+                    }
+                    removed++;
+                }
             }
         }
     }
+#undef DS_TRY
+    *pixelsChanged = changed;
     return removed;
 }
 
@@ -1645,23 +1705,57 @@ int EXPORT Despeckle(unsigned char *buf, int stride, int w, int h,
     int total = w * h;
     unsigned char *visited = (unsigned char *)malloc(total);
     if (!visited) return 0;
+    memset(visited, 0, total);
 
     int stackCap = 4096;
     int *stack = (int *)malloc(stackCap * sizeof(int));
     int compCap = 4096;
     int *comp = (int *)malloc(compCap * sizeof(int));
+    int *activeRows = (int *)malloc(h * sizeof(int));
     int removed = 0;
+    unsigned char generation = 0;
 
     int passRemoved;
     do {
-        memset(visited, 0, total);
+        /* Generation counter: increment instead of memset */
+        generation++;
+        if (generation == 0) {
+            memset(visited, 0, total);
+            generation = 1;
+        }
+
+        /* Row indexing: find rows with any black pixels (8 bytes at a time) */
+        int activeRowCount = 0;
+        int byteW = (w + 7) >> 3;
+        for (int y = 0; y < h; y++) {
+            int rowOff = y * stride;
+            int hasBlack = 0;
+            int b = 0;
+            for (; b + 8 <= byteW; b += 8) {
+                unsigned long long chunk;
+                __builtin_memcpy(&chunk, buf + rowOff + b, 8);
+                if (chunk != 0xFFFFFFFFFFFFFFFFULL) { hasBlack = 1; break; }
+            }
+            if (!hasBlack) {
+                for (; b < byteW; b++) {
+                    if (buf[rowOff + b] != 0xFF) { hasBlack = 1; break; }
+                }
+            }
+            if (hasBlack) activeRows[activeRowCount++] = y;
+        }
+
+        int pixelsChanged = 0;
         passRemoved = despeckle_single_pass(buf, stride, w, h, maxW, maxH,
-                                            visited, &stack, &stackCap,
-                                            &comp, &compCap);
+                                            visited, generation,
+                                            &stack, &stackCap,
+                                            &comp, &compCap,
+                                            activeRows, activeRowCount,
+                                            &pixelsChanged);
         removed += passRemoved;
+        if (passRemoved > 0 && !pixelsChanged) break;
     } while (passRemoved > 0);
 
-    free(comp); free(stack); free(visited);
+    free(activeRows); free(comp); free(stack); free(visited);
     return removed;
 }
 

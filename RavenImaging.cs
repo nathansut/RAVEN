@@ -58,11 +58,6 @@ public static class RavenImaging
         byte[] bgr, int w, int h, int stride, int tolerance);
 
     [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
-        EntryPoint = "RemoveBleedThroughFast")]
-    private static extern void NativeRemoveBleedThroughFast(
-        byte[] bgr, int w, int h, int stride, int tolerance);
-
-    [DllImport("recoip_native.dll", CallingConvention = CallingConvention.StdCall,
         EntryPoint = "RemoveBleedThroughGetBackground")]
     private static extern void NativeRemoveBleedThroughGetBackground(
         byte[] bgr, int w, int h, int stride,
@@ -142,7 +137,7 @@ public static class RavenImaging
         => NativeFindBlackBorder(buf, stride, w, h, bpp, side, minBlackPct, maxHoles);
 
     public static void RemoveBleedThroughDirect(byte[] bgr, int w, int h, int stride, int tolerance)
-        => NativeRemoveBleedThroughFast(bgr, w, h, stride, tolerance);
+        => NativeRemoveBleedThrough(bgr, w, h, stride, tolerance);
 
     public static void RemoveBleedThroughGetBackground(byte[] bgr, int w, int h, int stride,
         out int bgH, out int bgS, out int bgL, out int otsu)
