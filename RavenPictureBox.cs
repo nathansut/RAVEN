@@ -17,15 +17,19 @@ namespace RAVEN
     public class RavenPictureBox : Panel
     {
         // === Direct2D / WIC objects ===
-        private ID2D1Factory? _d2dFactory;
+        private ID2D1Factory1? _d2dFactory;
         private ID2D1HwndRenderTarget? _renderTarget;
+        private ID2D1DeviceContext? _deviceContext;
         private WIC.IWICImagingFactory? _wicFactory;
         private ID2D1Bitmap? _bitmap;
 
-        // Image dimensions (original, pre-rotation)
+        // Image dimensions (original full-res, pre-rotation)
         private int _imgW, _imgH;
         // Displayed dimensions (after rotation)
         private int _dispW, _dispH;
+
+        // true when _bitmap is a downscaled preview (triggers full-res reload on deep zoom)
+        private bool _isPreview;
 
         // Current rotation: 0, 90, 180, 270
         private int _rotation;
@@ -123,7 +127,7 @@ namespace RAVEN
         private void EnsureD2D()
         {
             if (_d2dFactory == null)
-                _d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory>();
+                _d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory1>();
 
             if (_wicFactory == null)
                 _wicFactory = new WIC.IWICImagingFactory();
@@ -134,6 +138,8 @@ namespace RAVEN
 
         private void CreateRenderTarget()
         {
+            _deviceContext?.Dispose();
+            _deviceContext = null;
             _renderTarget?.Dispose();
             _renderTarget = null;
 
@@ -154,11 +160,13 @@ namespace RAVEN
             };
 
             _renderTarget = _d2dFactory.CreateHwndRenderTarget(rtProps, hwndProps);
+            _deviceContext = _renderTarget.QueryInterface<ID2D1DeviceContext>();
         }
 
         private void DisposeD2D()
         {
             _bitmap?.Dispose(); _bitmap = null;
+            _deviceContext?.Dispose(); _deviceContext = null;
             _renderTarget?.Dispose(); _renderTarget = null;
             _wicFactory?.Dispose(); _wicFactory = null;
             _d2dFactory?.Dispose(); _d2dFactory = null;
@@ -198,6 +206,7 @@ namespace RAVEN
 
                     _imgW = cached.Width;
                     _imgH = cached.Height;
+                    _isPreview = false;
                     _currentFile = path;
                     _rotation = 0;
                     UpdateDisplayDimensions();
@@ -209,21 +218,48 @@ namespace RAVEN
 
                 // Normal path: load from file
                 // Load file bytes into memory so WIC never holds a file lock.
-                // Prevents "file is open in another process" when threshold writes the same TIF.
                 byte[] fileBytes = File.ReadAllBytes(path);
                 using var ms = new MemoryStream(fileBytes);
                 using var decoder = _wicFactory.CreateDecoderFromStream(
                     ms, WIC.DecodeOptions.CacheOnLoad);
                 using var frame = decoder.GetFrame(0);
+
+                var frameSize = frame.Size;
+                int origW = frameSize.Width;
+                int origH = frameSize.Height;
+
+                // Scale down if image is much larger than the panel (saves memory + GPU upload)
+                WIC.IWICBitmapSource wicSource = frame;
+                WIC.IWICBitmapScaler? scaler = null;
+                bool isPreview = false;
+
+                int panelW = Math.Max(Width, 1);
+                int panelH = Math.Max(Height, 1);
+                if (origW > panelW * 2 || origH > panelH * 2)
+                {
+                    // Scale to ~1.5x panel size (headroom for minor zoom without reload)
+                    float fitScale = Math.Min((float)panelW * 1.5f / origW, (float)panelH * 1.5f / origH);
+                    if (fitScale < 1f)
+                    {
+                        int scaledW = Math.Max(1, (int)(origW * fitScale));
+                        int scaledH = Math.Max(1, (int)(origH * fitScale));
+                        scaler = _wicFactory.CreateBitmapScaler();
+                        scaler.Initialize(frame, (uint)scaledW, (uint)scaledH, WIC.BitmapInterpolationMode.Fant);
+                        wicSource = scaler;
+                        isPreview = true;
+                    }
+                }
+
                 using var converter = _wicFactory.CreateFormatConverter();
-                converter.Initialize(frame, WIC.PixelFormat.Format32bppPBGRA,
+                converter.Initialize(wicSource, WIC.PixelFormat.Format32bppPBGRA,
                     WIC.BitmapDitherType.None, null, 0, WIC.BitmapPaletteType.Custom);
 
                 _bitmap = _renderTarget.CreateBitmapFromWicBitmap(converter);
+                scaler?.Dispose();
 
-                var size = _bitmap.PixelSize;
-                _imgW = size.Width;
-                _imgH = size.Height;
+                _imgW = origW;
+                _imgH = origH;
+                _isPreview = isPreview;
                 _currentFile = path;
                 _rotation = 0;
                 UpdateDisplayDimensions();
@@ -345,6 +381,7 @@ namespace RAVEN
 
                 _imgW = width;
                 _imgH = height;
+                _isPreview = false;
                 UpdateDisplayDimensions();
                 // Preserve current zoom — just re-render with the new bitmap
                 Render();
@@ -370,6 +407,7 @@ namespace RAVEN
             _viewRight = right;
             _viewBottom = bottom;
             LastZoomed = DateTime.Now;
+            MaybeReloadFullRes();
             Render();
         }
 
@@ -512,6 +550,68 @@ namespace RAVEN
         }
 
         // ============================================================
+        // Interpolation mode selection
+        // ============================================================
+
+        /// <summary>
+        /// Pick interpolation mode based on zoom level.
+        /// Downscaling (fit-to-panel): HighQualityCubic preserves fine detail.
+        /// Upscaling (zoomed in past 1:1): NearestNeighbor shows actual pixels.
+        /// </summary>
+        private InterpolationMode PickInterpolation(float destPixels, float srcPixels)
+        {
+            return destPixels < srcPixels * 0.95f
+                ? InterpolationMode.HighQualityCubic
+                : InterpolationMode.NearestNeighbor;
+        }
+
+        // ============================================================
+        // Full-resolution reload (when zooming into a preview bitmap)
+        // ============================================================
+
+        /// <summary>
+        /// Check if the current zoom level needs more resolution than the
+        /// preview bitmap can provide, and reload at full resolution if so.
+        /// </summary>
+        private void MaybeReloadFullRes()
+        {
+            if (!_isPreview || _bitmap == null || string.IsNullOrEmpty(_currentFile)) return;
+
+            float viewW = _viewRight - _viewLeft;
+            if (viewW <= 0 || _imgW <= 0) return;
+
+            int bmpW = _bitmap.PixelSize.Width;
+            // How many bitmap texels cover the current viewport
+            float texelsInView = bmpW * (viewW / _imgW);
+            int panelW = Math.Max(Width, 1);
+
+            // If we have fewer texels than panel pixels, the image would look soft
+            if (texelsInView < panelW)
+                LoadFullRes();
+        }
+
+        /// <summary>Reload the current file at full resolution (no WIC scaling).</summary>
+        private void LoadFullRes()
+        {
+            if (_renderTarget == null || _wicFactory == null || string.IsNullOrEmpty(_currentFile)) return;
+            try
+            {
+                byte[] fileBytes = File.ReadAllBytes(_currentFile);
+                using var ms = new MemoryStream(fileBytes);
+                using var decoder = _wicFactory.CreateDecoderFromStream(ms, WIC.DecodeOptions.CacheOnLoad);
+                using var frame = decoder.GetFrame(0);
+                using var converter = _wicFactory.CreateFormatConverter();
+                converter.Initialize(frame, WIC.PixelFormat.Format32bppPBGRA,
+                    WIC.BitmapDitherType.None, null, 0, WIC.BitmapPaletteType.Custom);
+
+                _bitmap?.Dispose();
+                _bitmap = _renderTarget.CreateBitmapFromWicBitmap(converter);
+                _isPreview = false;
+            }
+            catch { }
+        }
+
+        // ============================================================
         // Rendering
         // ============================================================
         private void Render()
@@ -524,8 +624,9 @@ namespace RAVEN
 
             if (_bitmap != null && _dispW > 0 && _dispH > 0)
             {
-                // Source rect in the actual bitmap (always full image for now)
-                var srcRect = new Vortice.RawRectF(0, 0, _imgW, _imgH);
+                // Source rect covers the full bitmap texture (may be scaled down from original)
+                var bmpSize = _bitmap.PixelSize;
+                var srcRect = new Vortice.RawRectF(0, 0, bmpSize.Width, bmpSize.Height);
 
                 // Destination rect: map the visible viewport to window coords
                 ImageToWindow(_viewLeft, _viewTop, out float dx1, out float dy1);
@@ -536,6 +637,10 @@ namespace RAVEN
                 // fills the panel. Compute where 0,0 and dispW,dispH map to.
                 ImageToWindow(0, 0, out float x0, out float y0);
                 ImageToWindow(_dispW, _dispH, out float x1, out float y1);
+
+                // Pick interpolation mode based on zoom level
+                float destW = Math.Abs(x1 - x0);
+                var interp = PickInterpolation(destW, bmpSize.Width);
 
                 // Apply rotation transform
                 var center = new System.Drawing.PointF((x0 + x1) / 2f, (y0 + y1) / 2f);
@@ -559,14 +664,20 @@ namespace RAVEN
                         // Draw into the swapped rect
                         var destRect = new Vortice.RawRectF(
                             cX - hh, cY - hw, cX + hh, cY + hw);
-                        _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
-                            Vortice.Direct2D1.BitmapInterpolationMode.Linear, srcRect);
+                        if (_deviceContext != null)
+                            _deviceContext.DrawBitmap(_bitmap, destRect, 1f, interp, srcRect, null);
+                        else
+                            _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
+                                BitmapInterpolationMode.Linear, srcRect);
                     }
                     else
                     {
                         var destRect = new Vortice.RawRectF(x0, y0, x1, y1);
-                        _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
-                            Vortice.Direct2D1.BitmapInterpolationMode.Linear, srcRect);
+                        if (_deviceContext != null)
+                            _deviceContext.DrawBitmap(_bitmap, destRect, 1f, interp, srcRect, null);
+                        else
+                            _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
+                                BitmapInterpolationMode.Linear, srcRect);
                     }
 
                     _renderTarget.Transform = System.Numerics.Matrix3x2.Identity;
@@ -574,8 +685,11 @@ namespace RAVEN
                 else
                 {
                     var destRect = new Vortice.RawRectF(x0, y0, x1, y1);
-                    _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
-                        Vortice.Direct2D1.BitmapInterpolationMode.Linear, srcRect);
+                    if (_deviceContext != null)
+                        _deviceContext.DrawBitmap(_bitmap, destRect, 1f, interp, srcRect, null);
+                    else
+                        _renderTarget.DrawBitmap(_bitmap, destRect, 1f,
+                            BitmapInterpolationMode.Linear, srcRect);
                 }
 
                 // Draw annotations (semi-transparent colored rects)
@@ -729,6 +843,7 @@ namespace RAVEN
                         _viewBottom = _selBottom;
                         LastZoomed = DateTime.Now;
                         ClearSelection();
+                        MaybeReloadFullRes();
                     }
                     else if (!wasDrag)
                     {
@@ -761,42 +876,9 @@ namespace RAVEN
                 OnDoDoubleRightClickEvent?.Invoke(this, EventArgs.Empty);
         }
 
-        protected override void OnMouseWheel(MouseEventArgs e)
-        {
-            base.OnMouseWheel(e);
-            if (_bitmap == null) return;
-
-            // Zoom in/out by 20% per notch
-            float factor = e.Delta > 0 ? 0.8f : 1.25f;
-
-            float vw = _viewRight - _viewLeft;
-            float vh = _viewBottom - _viewTop;
-            float cx = _viewLeft + vw / 2f;
-            float cy = _viewTop + vh / 2f;
-
-            float nw = vw * factor;
-            float nh = vh * factor;
-
-            // Don't zoom out past full image
-            if (nw > _dispW) nw = _dispW;
-            if (nh > _dispH) nh = _dispH;
-
-            _viewLeft = cx - nw / 2f;
-            _viewTop = cy - nh / 2f;
-            _viewRight = cx + nw / 2f;
-            _viewBottom = cy + nh / 2f;
-
-            // Clamp
-            if (_viewLeft < 0) { _viewRight -= _viewLeft; _viewLeft = 0; }
-            if (_viewTop < 0) { _viewBottom -= _viewTop; _viewTop = 0; }
-            if (_viewRight > _dispW) { _viewLeft -= (_viewRight - _dispW); _viewRight = _dispW; }
-            if (_viewBottom > _dispH) { _viewTop -= (_viewBottom - _dispH); _viewBottom = _dispH; }
-            _viewLeft = Math.Max(0, _viewLeft);
-            _viewTop = Math.Max(0, _viewTop);
-
-            LastZoomed = DateTime.Now;
-            Render();
-        }
+        // MouseWheel is NOT handled here — it bubbles up to Form1.Form1_MouseWheel
+        // which routes it to threshold settings (scroll wheel adjusts the highlighted
+        // conversion setting in the F2 panel, matching IET behavior).
 
         // ============================================================
         // WinForms overrides

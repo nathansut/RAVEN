@@ -1,0 +1,10 @@
+EXPORTS
+    AdaptiveThresholdAverage = AdaptiveThresholdAverage@32
+    BoxAverage_x87 = BoxAverage_x87@24
+    DynamicThresholdAverage = DynamicThresholdAverage@32
+    RefineThreshold = RefineThreshold@20
+    RemoveBleedThrough = RemoveBleedThrough@20
+    RgbToGray = RgbToGray@20
+    AdaptiveThresholdDiag = AdaptiveThresholdDiag@44
+    DynamicThresholdDiag = DynamicThresholdDiag@28
+    AdaptiveThresholdTest = AdaptiveThresholdTest@36

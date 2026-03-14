@@ -589,114 +589,114 @@ namespace RAVEN
             int Copy2 = 0; 
 
 
-            int ImageHandle = RecoIP.ImgOpen(jpg, 0);
+            int ImageHandle = RavenImaging.ImgOpen(jpg, 0);
 
             // A = Overscan 
             // B = Page border outside of photostat
             // C = Photostat
             
 
-            int CopyOfImage = RecoIP.ImgDuplicate(ImageHandle);
+            int CopyOfImage = RavenImaging.ImgDuplicate(ImageHandle);
 
             double test = 80.0;
 
-            // RecoIP.ImgBackTrackThresholdAverage(CopyOfImage, -1, -1, 80.0);
-            RecoIP.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
+            // RavenImaging.ImgBackTrackThresholdAverage(CopyOfImage, -1, -1, 80.0);
+            RavenImaging.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
             
 
 
 
 
-            int aLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-            int aTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-            int aRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-            int aBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
+            int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
+            int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
+            int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
+            int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
 
             if (aLeft < aRight && aTop < aBottom)
             {
-                RecoIP.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
+                RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
             }
 
-            RecoIP.ImgInvert(CopyOfImage);
+            RavenImaging.ImgInvert(CopyOfImage);
 
-            int bLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-            int bTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-            int bRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-            int bBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
+            int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
+            int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
+            int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
+            int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
 
             bLeft = bLeft + 20;
             bRight = bRight - 20;
 
             if (bLeft <= bRight && bTop <= bBottom)
             {
-                RecoIP.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
+                RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
             }
 
-            int cLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-            int cTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 80.0, 100);
-            int cRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-            int cBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 80.0, 100);
+            int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
+            int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80.0, 100);
+            int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
+            int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80.0, 100);
 
             cLeft = cLeft + 20;
             cRight = cRight - 20;
             cTop = cTop + 20;
             cBottom = cBottom - 20;
 
-            RecoIP.ImgDelete(CopyOfImage);
+            RavenImaging.ImgDelete(CopyOfImage);
 
-            RecoIP.ImgRemoveBleedThrough(ImageHandle, 1);
+            RavenImaging.ImgRemoveBleedThrough(ImageHandle, 1);
 
             if (aLeft<=aRight && aTop <= aBottom)
             {
-                Copy1 = RecoIP.ImgCopy(ImageHandle, aLeft, aTop, aRight, aBottom);
+                Copy1 = RavenImaging.ImgCopy(ImageHandle, aLeft, aTop, aRight, aBottom);
             }
 
             if (bLeft<=bRight && bTop <= bBottom)
             {
-                Copy2 = RecoIP.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
+                Copy2 = RavenImaging.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
             }
 
-            int Photostat = RecoIP.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
+            int Photostat = RavenImaging.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
 
-            RecoIP.ImgInvert(Photostat);
+            RavenImaging.ImgInvert(Photostat);
 
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 if (F2ActiveType.SelectedItem?.ToString() == "RDynamic")
                     Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
                 else
-                    RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+                    RavenImaging.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
                 sw.Stop();
                 AddStatusUpdate($"Threshold: {sw.ElapsedMilliseconds}ms ({F2ActiveType.SelectedItem})");
             }
 
             if (Despeckle == true)
             {
-                RecoIP.ImgDespeckle(Photostat, 3, 3);
+                RavenImaging.ImgDespeckle(Photostat, 3, 3);
             }
 
-            RecoIP.ImgRemoveBlackWires(Photostat);
+            RavenImaging.ImgRemoveBlackWires(Photostat);
 
-            int PhHeight = RecoIP.ImgGetHeight(Photostat) - 10;
+            int PhHeight = RavenImaging.ImgGetHeight(Photostat) - 10;
             int PhRatio = PhHeight / 5;
             int PhBreaks = PhHeight - 15000;
-            RecoIP.ImgRemoveVerticalLines(Photostat, PhHeight, PhBreaks, PhRatio, false, true);
+            RavenImaging.ImgRemoveVerticalLines(Photostat, PhHeight, PhBreaks, PhRatio, false, true);
 
-            RecoIP.ImgAdaptiveThresholdAverage(ImageHandle, 7, 7, -1, -1);
-            RecoIP.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
-            RecoIP.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
+            RavenImaging.ImgAdaptiveThresholdAverage(ImageHandle, 7, 7, -1, -1);
+            RavenImaging.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
+            RavenImaging.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
 
-            RecoIP.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
-            RecoIP.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
-            RecoIP.ImgAddCopy(ImageHandle, Copy1, aLeft, aTop);
+            RavenImaging.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
+            RavenImaging.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
+            RavenImaging.ImgAddCopy(ImageHandle, Copy1, aLeft, aTop);
 
             File.Delete(tif);
-            RecoIP.ImgSaveAsTif(ImageHandle, tif, 5, 0);
+            RavenImaging.ImgSaveAsTif(ImageHandle, tif, 5, 0);
 
-            RecoIP.ImgDelete(Photostat);
-            RecoIP.ImgDelete(Copy1);
-            RecoIP.ImgDelete(Copy2);
-            RecoIP.ImgDelete(ImageHandle);
+            RavenImaging.ImgDelete(Photostat);
+            RavenImaging.ImgDelete(Copy1);
+            RavenImaging.ImgDelete(Copy2);
+            RavenImaging.ImgDelete(ImageHandle);
 
         }
 

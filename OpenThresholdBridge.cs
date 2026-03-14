@@ -1,18 +1,15 @@
 using System;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
-using BitMiracle.LibTiff.Classic;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
 
 namespace RAVEN;
 
 /// <summary>
 /// Pure C# threshold pipeline for RDynamic.
-/// All image I/O via Emgu.CV — zero RecoIP dependency for RDynamic paths.
+/// Caching and orchestration layer for RDynamic/Refine paths. All image I/O via RavenImaging (GDI+).
 /// </summary>
 public static class OpenThresholdBridge
 {
@@ -26,19 +23,7 @@ public static class OpenThresholdBridge
     private static string  _cachedPath;
     private static readonly object _cacheLock = new object();
 
-    // Pre-built LUT tables for Recogniform-compatible grayscale (DynamicThreshold).
-    // gray = LUT_R[r] + LUT_G[g] + LUT_B[b]  where LUT_X[i] = (byte)Math.Round(i * weight)
-    private static readonly byte[] LUT_R = BuildLut(0.30);
-    private static readonly byte[] LUT_G = BuildLut(0.59);
-    private static readonly byte[] LUT_B = BuildLut(0.11);
 
-    private static byte[] BuildLut(double weight)
-    {
-        byte[] lut = new byte[256];
-        for (int i = 0; i < 256; i++)
-            lut[i] = (byte)Math.Round(i * weight);
-        return lut;
-    }
 
     // TIF bitmap cache: keeps the current output TIF in memory so partial
     // composites don't re-read from disk on every keystroke.
@@ -48,8 +33,22 @@ public static class OpenThresholdBridge
     private static string  _cachedTifPath;
     private static readonly object _tifLock = new object();
 
-    // Background save queue: save runs in background so display updates instantly.
+    // Background save with skip-if-busy: at most one save runs at a time.
+    // If the user scrolls contrast/brightness faster than the save can keep up,
+    // intermediate saves are skipped — only the latest pixels get written to disk.
+    // The display always updates instantly from the in-memory _cachedTif.
+    //
+    // How it works:
+    //   - QueueSave stores the latest request in _nextSave* fields.
+    //   - If no save is running, it starts one immediately.
+    //   - If a save IS running, it just returns (the request is remembered).
+    //   - When a save finishes, it checks _nextSave*. If a new request came in
+    //     while it was saving, it starts that one automatically.
     private static Task _pendingSave;
+    private static bool _saveRunning;
+    private static byte[] _nextSavePixels;
+    private static int _nextSaveWidth, _nextSaveHeight;
+    private static string _nextSavePath;
     private static readonly object _saveLock = new object();
 
     /// <summary>Last operation split timings (ms).</summary>
@@ -60,7 +59,7 @@ public static class OpenThresholdBridge
     /// <summary>True while a background save is in progress.</summary>
     public static bool IsSaveInProgress
     {
-        get { lock (_saveLock) return _pendingSave != null && !_pendingSave.IsCompleted; }
+        get { lock (_saveLock) return _saveRunning; }
     }
 
     /// <summary>
@@ -70,14 +69,19 @@ public static class OpenThresholdBridge
     public static Action<long> OnSaveCompleted { get; set; }
 
     /// <summary>
-    /// Block until any pending background save finishes.
+    /// Block until all pending saves finish (including any queued next-save).
     /// Call before navigation or before starting a new threshold on a different image.
     /// </summary>
     public static void WaitForPendingSave()
     {
-        Task t;
-        lock (_saveLock) t = _pendingSave;
-        try { t?.Wait(); } catch { }
+        // Loop because completing one save may start another (from _nextSave*)
+        while (true)
+        {
+            Task t;
+            lock (_saveLock) t = _pendingSave;
+            if (t == null || t.IsCompleted) break;
+            try { t.Wait(); } catch { }
+        }
     }
 
     /// <summary>
@@ -88,17 +92,14 @@ public static class OpenThresholdBridge
     {
         try
         {
-            using var mat = CvInvoke.Imread(jpgPath, ImreadModes.Color);
-            if (mat.IsEmpty) return;
-
-            (byte[] gray, byte[] grayAvg) = ConvertToGrayscaleDual(mat);
+            var (gray, grayAvg, w, h) = RavenImaging.LoadImageAsGrayscaleDual(jpgPath);
 
             lock (_cacheLock)
             {
                 _cachedGray    = gray;
                 _cachedGrayAvg = grayAvg;
-                _cachedWidth   = mat.Width;
-                _cachedHeight  = mat.Height;
+                _cachedWidth   = w;
+                _cachedHeight  = h;
                 _cachedPath    = jpgPath.ToLower();
             }
         }
@@ -136,7 +137,7 @@ public static class OpenThresholdBridge
 
     /// <summary>
     /// Full-image path: read source JPG, threshold, write TIF directly.
-    /// Zero RecoIP calls.
+    /// Zero RavenImaging calls.
     /// </summary>
     public static void ApplyThresholdToFile(string inputJpgPath, string outputTifPath,
         int windowW, int windowH, int contrast, int brightness,
@@ -150,14 +151,14 @@ public static class OpenThresholdBridge
         if (TryGetCache(inputJpgPath, out gray, out grayAvg, out width, out height))
         { /* fastest — already in memory */ }
         else
-        { (gray, grayAvg, width, height) = LoadGrayscalesFromFile(inputJpgPath); }
+        { (gray, grayAvg, width, height) = RavenImaging.LoadImageAsGrayscaleDual(inputJpgPath); }
         sw.Stop();
         LastDecodeMs = sw.ElapsedMilliseconds;
 
         sw.Restart();
-        byte[] binary = DynamicThreshold.Apply(gray, width, height, windowW, windowH, contrast, brightness);
+        byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
         if (refineThreshold)
-            binary = RefineThreshold.Apply(binary, grayAvg, width, height, refineTolerance);
+            binary = RavenImaging.RefineThresholdApply(binary, grayAvg, width, height, refineTolerance);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -179,7 +180,7 @@ public static class OpenThresholdBridge
     /// Partial-image path: read source JPG, crop to (x1,y1,x2,y2), threshold the
     /// crop, then composite into the output TIF.
     /// Uses cached TIF bitmap to avoid re-reading the full TIF from disk.
-    /// Zero RecoIP calls.
+    /// Zero RavenImaging calls.
     /// </summary>
     public static void ApplyThresholdToFilePartial(string inputJpgPath, string outputTifPath,
         int x1, int y1, int x2, int y2,
@@ -196,7 +197,7 @@ public static class OpenThresholdBridge
         if (TryGetCache(inputJpgPath, out gray, out grayAvg, out fullWidth, out fullHeight))
         { /* fastest — already in memory */ }
         else
-        { (gray, grayAvg, fullWidth, fullHeight) = LoadGrayscalesFromFile(inputJpgPath); }
+        { (gray, grayAvg, fullWidth, fullHeight) = RavenImaging.LoadImageAsGrayscaleDual(inputJpgPath); }
         sw.Stop();
         LastDecodeMs = sw.ElapsedMilliseconds;
 
@@ -224,9 +225,9 @@ public static class OpenThresholdBridge
 
         // Threshold the crop
         sw.Restart();
-        byte[] binary = DynamicThreshold.Apply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
+        byte[] binary = RavenImaging.DynamicThresholdApply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
         if (refineThreshold)
-            binary = RefineThreshold.Apply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
+            binary = RavenImaging.RefineThresholdApply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -241,7 +242,7 @@ public static class OpenThresholdBridge
         else if (File.Exists(outputTifPath))
         {
             // Cache miss — load from disk
-            (tifPixels, tifW, tifH) = LoadGrayscaleFromFile(outputTifPath);
+            (tifPixels, tifW, tifH) = RavenImaging.LoadImageAsGrayscale(outputTifPath);
         }
         else
         {
@@ -269,7 +270,7 @@ public static class OpenThresholdBridge
     }
 
     /// <summary>
-    /// Drop-in replacement for RecoIP.ImgDynamicThresholdAverage (handle-based).
+    /// Drop-in replacement for RavenImaging.ImgDynamicThresholdAverage (handle-based).
     /// Only used for non-RDynamic fallback paths.
     /// </summary>
     public static int ApplyThreshold(int imageHandle, int windowW, int windowH,
@@ -281,23 +282,29 @@ public static class OpenThresholdBridge
         if (jpgPath != null && TryGetCache(jpgPath, out gray, out _, out width, out height))
         { }
         else if (jpgPath != null)
-        { (gray, _, width, height) = LoadGrayscalesFromFile(jpgPath); }
+        { (gray, _, width, height) = RavenImaging.LoadImageAsGrayscaleDual(jpgPath); }
         else
-        { (gray, width, height) = LoadGrayscaleFromHandle(imageHandle); }
+        {
+            string tmpGray = Path.ChangeExtension(Path.GetTempFileName(), ".tif");
+            try
+            {
+                RavenImaging.ImgSaveAsTif(imageHandle, tmpGray, 0, 0);
+                (gray, width, height) = RavenImaging.LoadImageAsGrayscale(tmpGray);
+            }
+            finally { try { File.Delete(tmpGray); } catch { } }
+        }
 
-        byte[] binary = DynamicThreshold.Apply(gray, width, height, windowW, windowH, contrast, brightness);
+        byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
 
         string tempFile = Path.ChangeExtension(Path.GetTempFileName(), ".tif");
         try
         {
-            using var mat = new Mat(height, width, DepthType.Cv8U, 1);
-            Marshal.Copy(binary, 0, mat.DataPointer, binary.Length);
-            CvInvoke.Imwrite(tempFile, mat);
+            RavenImaging.SaveAsCcitt4Tif(binary, width, height, tempFile);
 
-            int newHandle = RecoIP.ImgOpen(tempFile, 1);
+            int newHandle = RavenImaging.ImgOpen(tempFile, 1);
             if (newHandle == 0) throw new Exception($"ImgOpen returned 0 for temp TIF: {tempFile}");
 
-            RecoIP.ImgDelete(imageHandle);
+            RavenImaging.ImgDelete(imageHandle);
             return newHandle;
         }
         finally
@@ -322,7 +329,7 @@ public static class OpenThresholdBridge
         if (TryGetCache(inputJpgPath, out srcGray, out srcAvg, out width, out height))
         { /* cached */ }
         else
-        { (srcGray, srcAvg, width, height) = LoadGrayscalesFromFile(inputJpgPath); }
+        { (srcGray, srcAvg, width, height) = RavenImaging.LoadImageAsGrayscaleDual(inputJpgPath); }
 
         // Clone + invert in a single parallel pass (avoids 2x sequential copy + invert)
         int len = width * height;
@@ -341,9 +348,9 @@ public static class OpenThresholdBridge
         LastDecodeMs = sw.ElapsedMilliseconds;
 
         sw.Restart();
-        byte[] binary = DynamicThreshold.Apply(gray, width, height, windowW, windowH, contrast, brightness);
+        byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
         if (refineThreshold)
-            binary = RefineThreshold.Apply(binary, grayAvg, width, height, refineTolerance);
+            binary = RavenImaging.RefineThresholdApply(binary, grayAvg, width, height, refineTolerance);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -377,7 +384,7 @@ public static class OpenThresholdBridge
         if (TryGetCache(inputJpgPath, out gray, out grayAvg, out fullWidth, out fullHeight))
         { /* fastest — already in memory */ }
         else
-        { (gray, grayAvg, fullWidth, fullHeight) = LoadGrayscalesFromFile(inputJpgPath); }
+        { (gray, grayAvg, fullWidth, fullHeight) = RavenImaging.LoadImageAsGrayscaleDual(inputJpgPath); }
         sw.Stop();
         LastDecodeMs = sw.ElapsedMilliseconds;
 
@@ -409,9 +416,9 @@ public static class OpenThresholdBridge
 
         // Threshold the inverted crop
         sw.Restart();
-        byte[] binary = DynamicThreshold.Apply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
+        byte[] binary = RavenImaging.DynamicThresholdApply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
         if (refineThreshold)
-            binary = RefineThreshold.Apply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
+            binary = RavenImaging.RefineThresholdApply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -422,7 +429,7 @@ public static class OpenThresholdBridge
             && tifW == fullWidth && tifH == fullHeight)
         { }
         else if (File.Exists(outputTifPath))
-        { (tifPixels, tifW, tifH) = LoadGrayscaleFromFile(outputTifPath); }
+        { (tifPixels, tifW, tifH) = RavenImaging.LoadImageAsGrayscale(outputTifPath); }
         else
         {
             tifW = fullWidth; tifH = fullHeight;
@@ -446,107 +453,69 @@ public static class OpenThresholdBridge
         QueueSave(tifPixels, tifW, tifH, outputTifPath);
     }
 
-    /// <summary>
-    /// Save pixel data as 1-bit CCITT Group 4 TIFF.
-    /// Parallel 8→1-bit conversion, strip-based encoding, atomic .tmp→move.
-    /// Returns true if the file was verified on disk with size > 0.
-    /// </summary>
-    public static bool SaveTif(byte[] pixels, int width, int height, string outputPath)
-    {
-        string tmpPath = Path.ChangeExtension(outputPath, ".tmp");
-        try
-        {
-            if (File.Exists(tmpPath)) File.Delete(tmpPath);
 
-            // Parallel 8-bit → 1-bit packed conversion (MSB first, 1=black 0=white)
-            int byteWidth = (width + 7) / 8;
-            byte[] packed = new byte[byteWidth * height];
 
-            Parallel.For(0, height, y =>
-            {
-                int src = y * width;
-                int dst = y * byteWidth;
-                int xFull = width & ~7; // round down to multiple of 8
-                for (int x = 0; x < xFull; x += 8)
-                {
-                    byte b = 0;
-                    if (pixels[src + x]     < 128) b |= 0x80;
-                    if (pixels[src + x + 1] < 128) b |= 0x40;
-                    if (pixels[src + x + 2] < 128) b |= 0x20;
-                    if (pixels[src + x + 3] < 128) b |= 0x10;
-                    if (pixels[src + x + 4] < 128) b |= 0x08;
-                    if (pixels[src + x + 5] < 128) b |= 0x04;
-                    if (pixels[src + x + 6] < 128) b |= 0x02;
-                    if (pixels[src + x + 7] < 128) b |= 0x01;
-                    packed[dst + (x >> 3)] = b;
-                }
-                // Remaining pixels
-                if (xFull < width)
-                {
-                    byte b = 0;
-                    for (int i = 0; i < width - xFull; i++)
-                        if (pixels[src + xFull + i] < 128) b |= (byte)(0x80 >> i);
-                    packed[dst + (xFull >> 3)] = b;
-                }
-            });
-
-            // Write Group 4 TIFF — single strip, one WriteEncodedStrip call
-            using (var tif = Tiff.Open(tmpPath, "w"))
-            {
-                if (tif == null) throw new Exception($"Could not create TIFF: {tmpPath}");
-
-                tif.SetField(TiffTag.IMAGEWIDTH, width);
-                tif.SetField(TiffTag.IMAGELENGTH, height);
-                tif.SetField(TiffTag.BITSPERSAMPLE, 1);
-                tif.SetField(TiffTag.SAMPLESPERPIXEL, 1);
-                tif.SetField(TiffTag.ORIENTATION, BitMiracle.LibTiff.Classic.Orientation.TOPLEFT);
-                tif.SetField(TiffTag.PHOTOMETRIC, Photometric.MINISWHITE);
-                tif.SetField(TiffTag.COMPRESSION, Compression.CCITTFAX4);
-                tif.SetField(TiffTag.FILLORDER, FillOrder.MSB2LSB);
-                tif.SetField(TiffTag.ROWSPERSTRIP, height);
-                tif.SetField(TiffTag.PLANARCONFIG, PlanarConfig.CONTIG);
-                tif.SetField(TiffTag.XRESOLUTION, 300.0);
-                tif.SetField(TiffTag.YRESOLUTION, 300.0);
-                tif.SetField(TiffTag.RESOLUTIONUNIT, ResUnit.INCH);
-
-                tif.WriteEncodedStrip(0, packed, packed.Length);
-                tif.WriteDirectory();
-            }
-
-            // Atomic replace
-            if (File.Exists(outputPath)) File.Delete(outputPath);
-            File.Move(tmpPath, outputPath);
-
-            var fi = new FileInfo(outputPath);
-            return fi.Exists && fi.Length > 0;
-        }
-        catch
-        {
-            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { }
-            throw;
-        }
-    }
 
     // -------------------------------------------------------------------------
     // Background save
     // -------------------------------------------------------------------------
 
+    /// <summary>
+    /// Queue a background save. If a save is already running, the request is
+    /// stored and will run automatically when the current save finishes.
+    /// If multiple requests arrive while a save is running, only the latest is kept.
+    /// </summary>
     private static void QueueSave(byte[] pixels, int width, int height, string outputPath)
     {
-        // Wait for any previous save to complete first (can't overlap writes to same file)
-        WaitForPendingSave();
-
         lock (_saveLock)
         {
-            _pendingSave = Task.Run(() =>
+            // Always store the latest request (overwrites any previous queued request)
+            _nextSavePixels = pixels;
+            _nextSaveWidth = width;
+            _nextSaveHeight = height;
+            _nextSavePath = outputPath;
+
+            // If a save is already running, it will pick this up when it finishes
+            if (_saveRunning) return;
+
+            // No save running — start one now
+            StartNextSave();
+        }
+    }
+
+    /// <summary>
+    /// Start a background save from _nextSave* fields. Must be called under _saveLock.
+    /// </summary>
+    private static void StartNextSave()
+    {
+        byte[] pixels = _nextSavePixels;
+        int width = _nextSaveWidth;
+        int height = _nextSaveHeight;
+        string path = _nextSavePath;
+        _nextSavePixels = null;
+        _saveRunning = true;
+
+        _pendingSave = Task.Run(() =>
+        {
+            try
             {
                 var sw = Stopwatch.StartNew();
-                SaveTif(pixels, width, height, outputPath);
+                RavenImaging.SaveAsCcitt4Tif(pixels, width, height, path);
                 sw.Stop();
                 LastWriteMs = sw.ElapsedMilliseconds;
                 OnSaveCompleted?.Invoke(sw.ElapsedMilliseconds);
-            });
-        }
+            }
+            finally
+            {
+                lock (_saveLock)
+                {
+                    _saveRunning = false;
+                    // If another request arrived while we were saving, start it now
+                    if (_nextSavePixels != null)
+                        StartNextSave();
+                }
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -587,93 +556,11 @@ public static class OpenThresholdBridge
         return false;
     }
 
-    /// <summary>Load a color image and return both grayscale conversions.</summary>
-    private static (byte[] gray, byte[] grayAvg, int width, int height) LoadGrayscalesFromFile(string path)
-    {
-        using var mat = CvInvoke.Imread(path, ImreadModes.Color);
-        if (mat.IsEmpty)
-        {
-            // Fallback for 1-bit/8-bit TIF: load as-is and extract single channel
-            using var gmat = CvInvoke.Imread(path, ImreadModes.Grayscale);
-            if (gmat.IsEmpty) throw new Exception($"Could not load image: {path}");
-            byte[] g = ExtractGray(gmat);
-            return (g, g, gmat.Width, gmat.Height); // same for both when already gray
-        }
-        var (lut, avg) = ConvertToGrayscaleDual(mat);
-        return (lut, avg, mat.Width, mat.Height);
-    }
 
-    /// <summary>Load a single grayscale from file (for TIF reload in partial paths).</summary>
-    private static (byte[] gray, int width, int height) LoadGrayscaleFromFile(string path)
-    {
-        using var mat = CvInvoke.Imread(path, ImreadModes.Grayscale);
-        if (mat.IsEmpty) throw new Exception($"Could not load image: {path}");
-        return (ExtractGray(mat), mat.Width, mat.Height);
-    }
 
-    private static (byte[] gray, int width, int height) LoadGrayscaleFromHandle(int imageHandle)
-    {
-        string tempFile = Path.ChangeExtension(Path.GetTempFileName(), ".tif");
-        try
-        {
-            RecoIP.ImgSaveAsTif(imageHandle, tempFile, 0, 0);
-            return LoadGrayscaleFromFile(tempFile);
-        }
-        finally
-        {
-            try { File.Delete(tempFile); } catch { }
-        }
-    }
 
-    /// <summary>
-    /// Compute both grayscale conversions in a single pass over the pixel data.
-    /// Bulk-copies the entire Mat to a managed array (one Marshal.Copy instead of
-    /// millions of Marshal.ReadByte), then runs a parallel loop computing both grays
-    /// for each pixel simultaneously.
-    /// </summary>
-    private static (byte[] grayLut, byte[] grayAvg) ConvertToGrayscaleDual(Mat mat)
-    {
-        int w = mat.Width, h = mat.Height;
-        byte[] grayLut = new byte[w * h];
-        byte[] grayAvg = new byte[w * h];
 
-        if (mat.NumberOfChannels == 1)
-        {
-            for (int y = 0; y < h; y++)
-                Marshal.Copy(mat.DataPointer + y * mat.Step, grayLut, y * w, w);
-            Buffer.BlockCopy(grayLut, 0, grayAvg, 0, grayLut.Length);
-            return (grayLut, grayAvg);
-        }
 
-        // Bulk-copy entire image to managed array (one P/Invoke vs ~57M ReadByte calls)
-        int step = (int)mat.Step;
-        byte[] raw = new byte[step * h];
-        Marshal.Copy(mat.DataPointer, raw, 0, raw.Length);
 
-        // Single parallel pass: read each pixel's BGR once, compute both gray values
-        Parallel.For(0, h, y =>
-        {
-            int srcRow = y * step;
-            int dstRow = y * w;
-            for (int x = 0; x < w; x++)
-            {
-                int off = srcRow + x * 3;
-                byte b = raw[off];
-                byte g = raw[off + 1];
-                byte r = raw[off + 2];
-                grayLut[dstRow + x] = (byte)(LUT_R[r] + LUT_G[g] + LUT_B[b]);
-                grayAvg[dstRow + x] = (byte)((r + g + b + 1) / 3);
-            }
-        });
 
-        return (grayLut, grayAvg);
-    }
-
-    private static byte[] ExtractGray(Mat mat)
-    {
-        byte[] gray = new byte[mat.Width * mat.Height];
-        for (int y = 0; y < mat.Height; y++)
-            Marshal.Copy(mat.DataPointer + y * mat.Step, gray, y * mat.Width, mat.Width);
-        return gray;
-    }
 }

@@ -32,8 +32,8 @@
             button_go = new System.Windows.Forms.Button();
             btnThresholdSettings = new System.Windows.Forms.Button();
             fileSystemWatcher1 = new System.IO.FileSystemWatcher();
-            keyPicture2 = new KeyPicture();
-            keyPicture1 = new KeyPicture();
+            keyPicture2 = new RavenPictureBox();
+            keyPicture1 = new RavenPictureBox();
             NextImage = new System.Windows.Forms.Button();
             PrevImage = new System.Windows.Forms.Button();
             buHelp = new System.Windows.Forms.Button();
@@ -187,10 +187,10 @@
         private System.Windows.Forms.Button button_go;
         private System.Windows.Forms.Button btnThresholdSettings;
         private System.IO.FileSystemWatcher fileSystemWatcher1;
-        private KeyPicture keyPicture2;
+        private RavenPictureBox keyPicture2;
         private System.Windows.Forms.Button PrevImage;
         private System.Windows.Forms.Button NextImage;
-        private KeyPicture keyPicture1;
+        private RavenPictureBox keyPicture1;
         private System.Windows.Forms.Button buHelp;
         private System.Windows.Forms.Button buPrecalcBorders;
         private System.Windows.Forms.Button button1;

@@ -23,9 +23,6 @@ using static System.Net.Mime.MediaTypeNames;
 using static System.Runtime.CompilerServices.RuntimeHelpers;
 using System.Reflection;
 using ImageMagick;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
 using static RAVEN.Form1;
 using System.Threading;
 
@@ -421,8 +418,8 @@ namespace RAVEN
             InitializeComponent();
             InitializeConversionSettings();
 
-            int TempRecog = RecoIP.ImgCreate(100, 100, 2, 300);
-            RecoIP.ImgDelete(TempRecog); 
+            int TempRecog = RavenImaging.ImgCreate(100, 100, 2, 300);
+            RavenImaging.ImgDelete(TempRecog); 
 
             this.KeyPreview = true;
             this.KeyDown += new KeyEventHandler(Form1_KeyDown);
@@ -1836,26 +1833,26 @@ namespace RAVEN
 
 
 
-                int FullImage = RecoIP.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
-                int CropBoxImage = RecoIP.ImgDuplicate(FullImage); 
+                int FullImage = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
+                int CropBoxImage = RavenImaging.ImgDuplicate(FullImage); 
 
-                RecoIP.ImgCropBorder(CropBoxImage, x1, y1, x2, y2);
+                RavenImaging.ImgCropBorder(CropBoxImage, x1, y1, x2, y2);
 
-                int FullJPG = RecoIP.ImgOpen(ImagePairs[currentImageIndex].JPG, 0);
-                int CropBoxJPG = RecoIP.ImgDuplicate(FullJPG);
+                int FullJPG = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].JPG, 0);
+                int CropBoxJPG = RavenImaging.ImgDuplicate(FullJPG);
                 
-                RecoIP.ImgCropBorder(CropBoxJPG, x1, y1, x2, y2);
+                RavenImaging.ImgCropBorder(CropBoxJPG, x1, y1, x2, y2);
 
 
-                int lb = RecoIP.ImgFindBlackBorderLeft(CropBoxImage, 97.0, 1);
-                int rb = RecoIP.ImgFindBlackBorderRight(CropBoxImage, 97.0, 1);
-                int tb = RecoIP.ImgFindBlackBorderTop(CropBoxImage, 97.0, 1);
-                int bb = RecoIP.ImgFindBlackBorderBottom(CropBoxImage, 97.0, 1);
+                int lb = RavenImaging.ImgFindBlackBorderLeft(CropBoxImage, 97.0, 1);
+                int rb = RavenImaging.ImgFindBlackBorderRight(CropBoxImage, 97.0, 1);
+                int tb = RavenImaging.ImgFindBlackBorderTop(CropBoxImage, 97.0, 1);
+                int bb = RavenImaging.ImgFindBlackBorderBottom(CropBoxImage, 97.0, 1);
 
-                int lbj = RecoIP.ImgFindBlackBorderLeft(CropBoxJPG, 79.0, 1);
-                int rbj = RecoIP.ImgFindBlackBorderRight(CropBoxJPG, 79.0, 1);
-                int tbj = RecoIP.ImgFindBlackBorderTop(CropBoxJPG, 79.0, 1);
-                int bbj = RecoIP.ImgFindBlackBorderBottom(CropBoxJPG, 79.0, 1);
+                int lbj = RavenImaging.ImgFindBlackBorderLeft(CropBoxJPG, 79.0, 1);
+                int rbj = RavenImaging.ImgFindBlackBorderRight(CropBoxJPG, 79.0, 1);
+                int tbj = RavenImaging.ImgFindBlackBorderTop(CropBoxJPG, 79.0, 1);
+                int bbj = RavenImaging.ImgFindBlackBorderBottom(CropBoxJPG, 79.0, 1);
 
 
                 // Set the crop position based on the current selection and whether the page is even or odd
@@ -1874,7 +1871,7 @@ namespace RAVEN
                     holes = holes + 1;
                     brightness = brightness - 1.0;
 
-                    seekval = RecoIP.ImgFindBlackBorderRight(CropBoxJPG, brightness, holes);
+                    seekval = RavenImaging.ImgFindBlackBorderRight(CropBoxJPG, brightness, holes);
                     if (seekval != this.CropWidth)
                     {
                         MessageBox.Show(seekval.ToString()); 
@@ -2014,28 +2011,28 @@ namespace RAVEN
 
             {
                // Not a blank image - so we insert one. 
-               int _ImageCopyHandle = RecoIP.ImgOpen(_tif, 0);
+               int _ImageCopyHandle = RavenImaging.ImgOpen(_tif, 0);
                var (_width, _height) = GetDimensions(_tif);
-               int _NewImg = RecoIP.ImgCreate(_width, _height, 1, 300);
+               int _NewImg = RavenImaging.ImgCreate(_width, _height, 1, 300);
 
                 
 
                 
-               int _NewImg2 = RecoIP.ImgCreate(_width, _height, 8, 300);
+               int _NewImg2 = RavenImaging.ImgCreate(_width, _height, 8, 300);
 
                string blankTif = _filename + "_Blank.tif";
                string blankJpg = _filename + "_Blank.jpg";
 
-                RecoIP.ImgDrawRectangle(_NewImg, 0, 0, _width, _height, 1, true);
+                RavenImaging.ImgDrawRectangle(_NewImg, 0, 0, _width, _height, 1, true);
                 // May want to add "Image Intentionally left blank" at some point. 
 
-                // RecoIP.ImgDrawText(_NewImg, 150, 150, 1, 1, 1, 1, "This Image Intentionally Left Blank.");
-                // RecoIP.ImgDrawText(_NewImg, "Hello, World!", 50, 50, "Arial", 12, 0,  0, 1); // 0 represents black, 1 represents white in a bitonal image
+                // RavenImaging.ImgDrawText(_NewImg, 150, 150, 1, 1, 1, 1, "This Image Intentionally Left Blank.");
+                // RavenImaging.ImgDrawText(_NewImg, "Hello, World!", 50, 50, "Arial", 12, 0,  0, 1); // 0 represents black, 1 represents white in a bitonal image
 
-                RecoIP.ImgSaveAsTif(_NewImg, Path.Combine(_path, _filename + "_Blank.tif"), 5, 0);
+                RavenImaging.ImgSaveAsTif(_NewImg, Path.Combine(_path, _filename + "_Blank.tif"), 5, 0);
 
-                RecoIP.ImgDrawRectangle(_NewImg2, 0, 0, _width, _height, 255, true);
-                RecoIP.ImgSaveAsJpg(_NewImg2, Path.Combine(_path, _filename + "_Blank.jpg"), 80);
+                RavenImaging.ImgDrawRectangle(_NewImg2, 0, 0, _width, _height, 255, true);
+                RavenImaging.ImgSaveAsJpg(_NewImg2, Path.Combine(_path, _filename + "_Blank.jpg"), 80);
 
                 // Insert the new blank image pair into the list
                 ImagePairs.Insert(currentImageIndex + 1, (Path.Combine(_path, _filename + "_Blank.jpg"), Path.Combine(_path, _filename + "_Blank.tif"), 0, 0, 0, 0));
@@ -2046,8 +2043,8 @@ namespace RAVEN
                 // Refresh the display
                 DisplayImages(ImagePairs[currentImageIndex].JPG, ImagePairs[currentImageIndex].TIF, 0, true);
                 StatusUpdate("Inserted " + _filename + "_Blank");
-                RecoIP.ImgDelete(_NewImg);
-                RecoIP.ImgDelete(_NewImg2);
+                RavenImaging.ImgDelete(_NewImg);
+                RavenImaging.ImgDelete(_NewImg2);
             }
 
         }
@@ -2061,8 +2058,8 @@ namespace RAVEN
         {
             //Works w JPG or TIF images 
 
-            int _Rotatehandle = RecoIP.ImgOpen(image, 0);
-            RecoIP.ImgRotate(_Rotatehandle, 90);
+            int _Rotatehandle = RavenImaging.ImgOpen(image, 0);
+            RavenImaging.ImgRotate(_Rotatehandle, 90);
 
             if (image.EndsWith(".tif", StringComparison.OrdinalIgnoreCase))
             {
@@ -2091,7 +2088,7 @@ namespace RAVEN
         /// <param name="degrees">The degrees to rotate.</param>
         private void FineRotateAlt(string image, float degrees)
         {
-            RotateWithSameCanvasSizeEmgu(image, (float)degrees, image);
+            RotateWithSameCanvasSize(image, (float)degrees, image);
             bool isRotated = IsFineRotated(image);
 
             if (!isRotated)
@@ -2110,15 +2107,15 @@ namespace RAVEN
         private void FineRotate(string image, float degrees)
         {
 
-            int _Rotatehandle = RecoIP.ImgOpen(image, 0);
+            int _Rotatehandle = RavenImaging.ImgOpen(image, 0);
 
-            RecoIP.ImgCorrectDeformation1(_Rotatehandle, degrees, degrees, true);
+            RavenImaging.ImgCorrectDeformation1(_Rotatehandle, degrees, degrees, true);
 
-            int newHeight = RecoIP.ImgGetHeight(_Rotatehandle); 
-            int newWidth = RecoIP.ImgGetWidth(_Rotatehandle) + 1;
+            int newHeight = RavenImaging.ImgGetHeight(_Rotatehandle); 
+            int newWidth = RavenImaging.ImgGetWidth(_Rotatehandle) + 1;
 
             // Change using TIF tag to adding column of white. 
-            RecoIP.ImgResize(_Rotatehandle, newWidth, newHeight, 0); 
+            RavenImaging.ImgResize(_Rotatehandle, newWidth, newHeight, 0); 
 
             bool ImgSaved = RecogSaveImage(_Rotatehandle, image);
 
@@ -2134,7 +2131,7 @@ namespace RAVEN
             }
             */ 
           
-            RecoIP.ImgDelete(_Rotatehandle);
+            RavenImaging.ImgDelete(_Rotatehandle);
 
             // Update action status
             actionStatus = "FR: " + degrees.ToString();
@@ -2226,9 +2223,9 @@ namespace RAVEN
                 // Try to save the image, with one retry on failure
                 Action saveImage = () => {
                     if (extension == ".tif")
-                        RecoIP.ImgSaveAsTif(ImgHandle, tmpFile, 5, 0);
+                        RavenImaging.ImgSaveAsTif(ImgHandle, tmpFile, 5, 0);
                     else
-                        RecoIP.ImgSaveAsJpg(ImgHandle, tmpFile, 80);
+                        RavenImaging.ImgSaveAsJpg(ImgHandle, tmpFile, 80);
                 };
 
                 try { saveImage(); }
@@ -2332,11 +2329,11 @@ namespace RAVEN
 
 
             // 31 ms for this function 
-            int _tifHandle = RecoIP.ImgOpen(tifimage, 0);
-            int _jpgHandle = RecoIP.ImgOpen(tifimage.Replace(".tif", ".jpg"), 0);
+            int _tifHandle = RavenImaging.ImgOpen(tifimage, 0);
+            int _jpgHandle = RavenImaging.ImgOpen(tifimage.Replace(".tif", ".jpg"), 0);
 
                     
-            double skewangle = RecoIP.ImgDeskew(_tifHandle, 5, 0.1, 1, 0, 0);
+            double skewangle = RavenImaging.ImgDeskew(_tifHandle, 5, 0.1, 1, 0, 0);
 
 
             // ImgCorrectSkew & ImgCorrectSkew1 do not work
@@ -2345,18 +2342,18 @@ namespace RAVEN
             // Put deskew code from imagemagic below here
 
 
-            // RecoIP.ImgSaveAsTif(_tifHandle, temptif, 5, 0);
-            //  RecoIP.ImgSaveAsJpg(_jpgHandle, tempjpg, 80); 
-            RecoIP.ImgDelete(_tifHandle);
-            RecoIP.ImgDelete(_jpgHandle);
+            // RavenImaging.ImgSaveAsTif(_tifHandle, temptif, 5, 0);
+            //  RavenImaging.ImgSaveAsJpg(_jpgHandle, tempjpg, 80); 
+            RavenImaging.ImgDelete(_tifHandle);
+            RavenImaging.ImgDelete(_jpgHandle);
 
             /*
             RotateWithSameCanvasSize(tifimage, skewangle, temptif);
             RotateWithSameCanvasSize(jpgimage, skewangle, tempjpg);
             */
 
-            RotateWithSameCanvasSizeEmgu(tifimage, skewangle, temptif);
-            RotateWithSameCanvasSizeEmgu(jpgimage, skewangle, tempjpg);
+            RotateWithSameCanvasSize(tifimage, skewangle, temptif);
+            RotateWithSameCanvasSize(jpgimage, skewangle, tempjpg);
 
             // Stop the stopwatch
             stopwatch.Stop();
@@ -2372,110 +2369,53 @@ namespace RAVEN
 
 
 
-        public void RotateWithSameCanvasSizeEmgu(string imagePath, double angle, string outputPath)
+        public void RotateWithSameCanvasSize(string imagePath, double angle, string outputPath)
         {
-            // Load the image in unchanged mode to preserve the original bit depth
-            using (Mat src = CvInvoke.Imread(imagePath, ImreadModes.Unchanged))
+            // GDI+ implementation — no Emgu.CV dependency
+            using (var src = new Bitmap(imagePath))
             {
-                // Ensure the image is single-channel
-                if (src.NumberOfChannels != 1)
-                    throw new ArgumentException("Input image must be single-channel (bitonal).");
+                int width  = src.Width;
+                int height = src.Height;
 
-                // Define the center of rotation
-                PointF center = new PointF(src.Width / 2f, src.Height / 2f);
-
-                // Get the rotation matrix for the specified angle
-                using (Mat rotationMatrix = new Mat())
+                // Render into 32bppArgb with white background, apply rotation
+                using (var canvas = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                using (var g = Graphics.FromImage(canvas))
                 {
-                    CvInvoke.GetRotationMatrix2D(center, -angle, 1.0, rotationMatrix);
+                    g.Clear(Color.White);
+                    g.TranslateTransform(width / 2f, height / 2f);
+                    g.RotateTransform((float)-angle);
+                    g.TranslateTransform(-width / 2f, -height / 2f);
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                    g.DrawImage(src, 0, 0);
 
-                    // Rotate the image using nearest neighbor interpolation
-                    using (Mat rotated = new Mat())
+                    // Extract pixels as grayscale, binarize at threshold 128
+                    var bmpData = canvas.LockBits(
+                        new Rectangle(0, 0, width, height),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                    byte[] gray = new byte[width * height];
+                    unsafe
                     {
-                        CvInvoke.WarpAffine(
-                            src,
-                            rotated,
-                            rotationMatrix,
-                            src.Size,
-                            Inter.Nearest, // Minimizes introduction of new grayscale values
-                            Warp.Default,
-                            BorderType.Constant,
-                            new MCvScalar(255) // White background
-                        );
-
-                        // Apply binary threshold to ensure the image remains strictly bitonal
-                        CvInvoke.Threshold(rotated, rotated, 127, 255, ThresholdType.Binary);
-
-                        // Save the rotated image using LibTiff.NET
-                        SaveAsTiff(rotated, outputPath);
+                        byte* ptr = (byte*)bmpData.Scan0.ToPointer();
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++)
+                            {
+                                int idx = y * bmpData.Stride + x * 4;
+                                byte b = ptr[idx];
+                                byte gv = ptr[idx + 1];
+                                byte r = ptr[idx + 2];
+                                // Luminance; binarize immediately
+                                byte lum = (byte)(0.299 * r + 0.587 * gv + 0.114 * b);
+                                gray[y * width + x] = lum < 128 ? (byte)0 : (byte)255;
+                            }
+                        }
                     }
+                    canvas.UnlockBits(bmpData);
+
+                    RavenImaging.SaveAsCcitt4Tif(gray, width, height, outputPath);
                 }
-            }
-        }
-
-        /// <summary>
-        /// Saves a single-channel 8-bit Mat as a 1bpp TIFF with CCITT Group 4 compression using LibTiff.NET.
-        /// </summary>
-        private void SaveAsTiff(Mat mat, string outputPath)
-        {
-            if (mat.NumberOfChannels != 1 || mat.Depth != DepthType.Cv8U)
-                throw new ArgumentException("Input Mat must be single-channel 8-bit image.");
-
-            int width = mat.Width;
-            int height = mat.Height;
-
-            // Create a byte array from the Mat
-            byte[] matBytes = new byte[width * height];
-            Marshal.Copy(mat.DataPointer, matBytes, 0, matBytes.Length);
-
-            // Convert to 1bpp format required by CCITT Group 4
-            // Each byte represents 8 pixels, MSB first
-            int byteWidth = (width + 7) / 8;
-            byte[] tiffBytes = new byte[byteWidth * height];
-            Array.Clear(tiffBytes, 0, tiffBytes.Length);
-
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    byte pixel = matBytes[y * width + x] < 128 ? (byte)1 : (byte)0; // 1=black, 0=white
-                    int byteIndex = y * byteWidth + (x / 8);
-                    int bitPosition = 7 - (x % 8);
-                    tiffBytes[byteIndex] |= (byte)(pixel << bitPosition);
-                }
-            }
-
-            // Write using LibTiff.NET
-            using (Tiff image = Tiff.Open(outputPath, "w"))
-            {
-                if (image == null)
-                    throw new Exception("Could not open the output TIFF file for writing.");
-
-                // Set TIFF fields
-                image.SetField(TiffTag.IMAGEWIDTH, width);
-                image.SetField(TiffTag.IMAGELENGTH, height);
-                image.SetField(TiffTag.BITSPERSAMPLE, 1);
-                image.SetField(TiffTag.SAMPLESPERPIXEL, 1);
-                image.SetField(TiffTag.ORIENTATION, BitMiracle.LibTiff.Classic.Orientation.TOPLEFT);
-                image.SetField(TiffTag.PHOTOMETRIC, Photometric.MINISWHITE); // 0=white, 1=black
-                image.SetField(TiffTag.COMPRESSION, Compression.CCITTFAX4);
-                image.SetField(TiffTag.FILLORDER, FillOrder.MSB2LSB);
-                image.SetField(TiffTag.ROWSPERSTRIP, height);
-                image.SetField(TiffTag.PLANARCONFIG, PlanarConfig.CONTIG);
-
-                // Write the image data
-                for (int y = 0; y < height; y++)
-                {
-                    int offset = y * byteWidth;
-                    byte[] scanline = new byte[byteWidth];
-                    Array.Copy(tiffBytes, offset, scanline, 0, byteWidth);
-                    if (!image.WriteScanline(scanline, y))
-                    {
-                        throw new Exception($"Failed to write scanline {y}.");
-                    }
-                }
-
-                image.WriteDirectory();
             }
         }
 
@@ -2529,9 +2469,9 @@ namespace RAVEN
 
 
         private void StatusUpdate(string Append = "")
-        { 
-            string status = this.ImagePairs[currentImageIndex].TIF + " | " + this.actionStatus + " | " + selectionStatus + " | " + modeStatus + " | " + autolineStatus;
-            if (Append != "") { status = status + Append; } 
+        {
+            string status = "RAVEN2 | " + this.ImagePairs[currentImageIndex].TIF + " | " + this.actionStatus + " | " + selectionStatus + " | " + modeStatus + " | " + autolineStatus;
+            if (Append != "") { status = status + Append; }
 
             this.Text = status; 
         }
@@ -2620,19 +2560,19 @@ namespace RAVEN
 
             if (F2Settings.NegativeImage != true) { return; }
 
-            int ImageHandle = RecoIP.ImgOpen(ImagePairs[currentImageIndex].JPG, 0);
-            int TifHandle = RecoIP.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
+            int ImageHandle = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].JPG, 0);
+            int TifHandle = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
 
-            int jpgWidth = RecoIP.ImgGetWidth(ImageHandle);
-            int jpgHeight = RecoIP.ImgGetHeight(TifHandle);
-            int tifWidth = RecoIP.ImgGetWidth(ImageHandle);
-            int tifHeight = RecoIP.ImgGetHeight(TifHandle);
+            int jpgWidth = RavenImaging.ImgGetWidth(ImageHandle);
+            int jpgHeight = RavenImaging.ImgGetHeight(TifHandle);
+            int tifWidth = RavenImaging.ImgGetWidth(ImageHandle);
+            int tifHeight = RavenImaging.ImgGetHeight(TifHandle);
 
             if (jpgWidth != tifWidth || jpgHeight != tifHeight)
             {
                 StatusUpdate("TIF & JPG Size Don't Match!");
-                RecoIP.ImgDelete(ImageHandle);
-                RecoIP.ImgDelete(TifHandle);
+                RavenImaging.ImgDelete(ImageHandle);
+                RavenImaging.ImgDelete(TifHandle);
                 return;
             }
             // Copied from photostat script
@@ -2640,43 +2580,43 @@ namespace RAVEN
             // B is the page border outside the photostat
             // C is the Photostat
 
-            int CopyOfImage = RecoIP.ImgDuplicate(ImageHandle);
+            int CopyOfImage = RavenImaging.ImgDuplicate(ImageHandle);
             // stopwatch.Start();
 
 
-            // RecoIP.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
+            // RavenImaging.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
             // ImgAutoThreshold(_CurrentImage, 1);
-            RecoIP.ImgAutoThreshold(CopyOfImage, 1);
+            RavenImaging.ImgAutoThreshold(CopyOfImage, 1);
             // 
-            int aLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-            int aTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-            int aRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-            int aBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
+            int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
+            int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
+            int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
+            int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
 
             if ((aLeft <= aRight) && (aTop <= aBottom))
             {
-                RecoIP.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
+                RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
 
                 //Copy of image has black interior photostat bitonal - we will invert this. 
-                RecoIP.ImgInvert(CopyOfImage);
+                RavenImaging.ImgInvert(CopyOfImage);
 
                 //Now we'll find the black border which is the scan border, we'll crop it off (I think this is not right desc - but function works)
-                int bLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-                int bTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-                int bRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-                int bBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
+                int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
+                int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
+                int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
+                int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
 
                 bLeft = bLeft + 20;
                 bRight = bRight - 20;
 
                 if (bLeft <= bRight && bTop <= bBottom)
                 {
-                    RecoIP.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
+                    RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
 
-                    int cLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-                    int cTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
-                    int cRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-                    int cBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
+                    int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
+                    int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
+                    int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
+                    int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
 
                     // don't understand the math here but think works
                     int left = aLeft + (bLeft + 20) + cLeft;
@@ -2753,9 +2693,9 @@ namespace RAVEN
                 }
 
                 
-                RecoIP.ImgDelete(ImageHandle);
-                RecoIP.ImgDelete(TifHandle);
-                RecoIP.ImgDelete(CopyOfImage);
+                RavenImaging.ImgDelete(ImageHandle);
+                RavenImaging.ImgDelete(TifHandle);
+                RavenImaging.ImgDelete(CopyOfImage);
             }
         }
 
@@ -2862,12 +2802,12 @@ namespace RAVEN
             }
 
             // Open TIF if exists
-            int TifHandle = File.Exists(tifimage) ? RecoIP.ImgOpen(tifimage, 0) : 0;         
+            int TifHandle = File.Exists(tifimage) ? RavenImaging.ImgOpen(tifimage, 0) : 0;         
 
             // Perform the crop
-            RecoIP.ImgCropBorder(TifHandle, X1, Y1, X2, Y2);
+            RavenImaging.ImgCropBorder(TifHandle, X1, Y1, X2, Y2);
             RecogSaveImage(TifHandle, tifimage);                
-            RecoIP.ImgDelete(TifHandle); // Clean up TIF image handle
+            RavenImaging.ImgDelete(TifHandle); // Clean up TIF image handle
 
             // Crop JPG if Special_CropJPG is enabled
             if (Special_CropJPG)
@@ -2875,12 +2815,12 @@ namespace RAVEN
                 string jpgImage = Path.ChangeExtension(tifimage, ".jpg");
                 if (File.Exists(jpgImage))
                 {
-                    int JpgHandle = RecoIP.ImgOpen(jpgImage, 0);
+                    int JpgHandle = RavenImaging.ImgOpen(jpgImage, 0);
                     if (JpgHandle != 0)
                     {
-                        RecoIP.ImgCropBorder(JpgHandle, X1, Y1, X2, Y2);
-                        RecoIP.ImgSaveAsJpg(JpgHandle, jpgImage, 80);
-                        RecoIP.ImgDelete(JpgHandle);
+                        RavenImaging.ImgCropBorder(JpgHandle, X1, Y1, X2, Y2);
+                        RavenImaging.ImgSaveAsJpg(JpgHandle, jpgImage, 80);
+                        RavenImaging.ImgDelete(JpgHandle);
                     }
                 }
             }
@@ -3015,7 +2955,9 @@ namespace RAVEN
                         {
                             DisplayImages(jpgImage, jpgImage.ToLower().Replace(".jpg", ".tif"), 0, true);
                         }
-                        else if (OpenThresholdBridge.TryGetDisplayPixels(out byte[] tifPixels, out int tifW, out int tifH))
+                        else if (_ConversionSettings?.Type == "RDynamic" || _ConversionSettings?.Type == "Refine"
+                            ? OpenThresholdBridge.TryGetDisplayPixels(out byte[] tifPixels, out int tifW, out int tifH)
+                            : false)
                         {
                             // Display from cached pixels — skip disk read + Group 4 decode
                             keyPicture2.LoadFromGrayscalePixels(tifPixels, tifW, tifH);
@@ -3698,7 +3640,7 @@ namespace RAVEN
                 return;
             }
 
-            int TifHandle = File.Exists(tifimage) ? RecoIP.ImgOpen(tifimage, 0) : 0; // Open TIF if exists
+            int TifHandle = File.Exists(tifimage) ? RavenImaging.ImgOpen(tifimage, 0) : 0; // Open TIF if exists
 
             // If Tifhandle not loaded, exit function
             if (TifHandle <= 0)
@@ -3711,15 +3653,15 @@ namespace RAVEN
             int height = Y2 - Y1;
 
             // Corrected call with width and height
-            int TifHandlePartial = RecoIP.ImgCopy(TifHandle, X1, Y1, X2, Y2);
-            RecoIP.ImgInvert(TifHandlePartial);
-            RecoIP.ImgAddCopy(TifHandle, TifHandlePartial, X1, Y1);
-            if (TifHandlePartial != 0) RecoIP.ImgDelete(TifHandlePartial); // Clean up TIF image handle if it was used 
+            int TifHandlePartial = RavenImaging.ImgCopy(TifHandle, X1, Y1, X2, Y2);
+            RavenImaging.ImgInvert(TifHandlePartial);
+            RavenImaging.ImgAddCopy(TifHandle, TifHandlePartial, X1, Y1);
+            if (TifHandlePartial != 0) RavenImaging.ImgDelete(TifHandlePartial); // Clean up TIF image handle if it was used 
 
             // Save the final thresholded TIF image
             RecogSaveImage(TifHandle, tifimage); 
 
-            if (TifHandle != 0) RecoIP.ImgDelete(TifHandle); // Clean up TIF image handle if it was used
+            if (TifHandle != 0) RavenImaging.ImgDelete(TifHandle); // Clean up TIF image handle if it was used
 
             DisplayImages(string.Empty, tifimage, 2, true);
 
@@ -3794,6 +3736,9 @@ namespace RAVEN
             // Cancel background image prefetch to free CPU cores for thresholding
             RavenPictureBox.CancelAllPrefetch();
 
+            // Ensure any previous background TIF save finishes before we touch the same .tmp file
+            OpenThresholdBridge.WaitForPendingSave();
+
             if (ForceClearCache == true)
             {
                 ClearJPGCache();
@@ -3816,7 +3761,7 @@ namespace RAVEN
                 // Is this image loaded / cached already? (We will delete it on "Next Image"
                 if (CachedJPG == 0 || ForceClearCache == true)
                 {
-                    ImageHandle = RecoIP.ImgOpen(inputJPG, 0); // Open original image
+                    ImageHandle = RavenImaging.ImgOpen(inputJPG, 0); // Open original image
                     CachedJPG = ImageHandle; // Save the handle for later. 
                 }
                 else
@@ -3826,13 +3771,13 @@ namespace RAVEN
             }
             else
             {
-                ImageHandle = RecoIP.ImgOpen(inputJPG, 0); // Open original image
+                ImageHandle = RavenImaging.ImgOpen(inputJPG, 0); // Open original image
                 CachedJPG = ImageHandle; // Save the handle for later. 
 
             }
 
             // Think I can get rid of this in some cases (full conversion) since I do my width / height w phreview 
-            int TifHandle = File.Exists(outputTIF) ? RecoIP.ImgOpen(outputTIF, 0) : 0; // Open TIF if exists (copies area into the TIF if area)
+            int TifHandle = File.Exists(outputTIF) ? RavenImaging.ImgOpen(outputTIF, 0) : 0; // Open TIF if exists (copies area into the TIF if area)
             int tImageHandle = 0; 
 
             int GreyscaleForRefine = 0;
@@ -3845,83 +3790,84 @@ namespace RAVEN
                 // If isNegative set (Photostat) & full conversion run this script to deal with borders. 
 
                 // Using tImageHandle to save original to keep
-                tImageHandle = RecoIP.ImgDuplicate(ImageHandle);
+                tImageHandle = RavenImaging.ImgDuplicate(ImageHandle);
                 
                 // Full + Photostat + Non SBB Thresholding
                 if (NegativeImage == true && SBB == false)
                 {
                     StatusUpdate("Photostat Threshold - please wait ... ");
 
-                    // Pure C# path — invert, threshold, save TIF directly (RDynamic + Refine)
-                    if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
+                    // Pure C# path for Refine only — photostat RDynamic uses border pipeline below
+                    if (conversionSettings?.Type == "Refine")
                     {
                         OpenThresholdBridge.ApplyThresholdToFileNegative(inputJPG, outputTIF, 7, 7, contrast, brightness,
                             RefineThreshold, refinetolerance);
-                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        OpenThresholdBridge.WaitForPendingSave();
+                        long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
                         string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
-                        if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
-                        if (TifHandle    != 0) { RecoIP.ImgDelete(TifHandle);    TifHandle    = 0; }
+                        _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
+                        if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
+                        if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
                         return;
                     }
 
-                    int CopyOfImage = RecoIP.ImgDuplicate(tImageHandle);
+                    int CopyOfImage = RavenImaging.ImgDuplicate(tImageHandle);
                     
-                    RecoIP.ImgAutoThreshold(CopyOfImage, 2);
+                    RavenImaging.ImgAutoThreshold(CopyOfImage, 2);
 
-                    int aLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-                    int aTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-                    int aRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-                    int aBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
+                    int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
+                    int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
+                    int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
+                    int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
 
                     if ((aLeft <= aRight) && (aTop <= aBottom))
                     {
-                        RecoIP.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
+                        RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
 
                         //Copy of image has black interior photostat bitonal - we will invert this. 
-                        RecoIP.ImgInvert(CopyOfImage);
+                        RavenImaging.ImgInvert(CopyOfImage);
 
                         //Now we'll find the black border which is the scan border, we'll crop it off (I think this is not right desc - but function works)
-                        int bLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-                        int bTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-                        int bRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-                        int bBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
+                        int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
+                        int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
+                        int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
+                        int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
 
                         bLeft = bLeft + 20;
                         bRight = bRight - 20;
 
                         if (bLeft <= bRight && bTop <= bBottom)
                         {
-                            RecoIP.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
+                            RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
 
-                            int cLeft = RecoIP.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-                            int cTop = RecoIP.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
-                            int cRight = RecoIP.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-                            int cBottom = RecoIP.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
+                            int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
+                            int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
+                            int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
+                            int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
 
-                            RecoIP.ImgDelete(CopyOfImage);
+                            RavenImaging.ImgDelete(CopyOfImage);
 
-                            RecoIP.ImgRemoveBleedThrough(tImageHandle, 1);
+                            RavenImaging.ImgRemoveBleedThrough(tImageHandle, 1);
 
                             int Copy1 = 0;
                             int Copy2 = 0;
 
                             if (aLeft <= aRight && aTop <= aBottom)
                             {
-                                Copy1 = RecoIP.ImgCopy(tImageHandle, aLeft, aTop, aRight, aBottom);
+                                Copy1 = RavenImaging.ImgCopy(tImageHandle, aLeft, aTop, aRight, aBottom);
                             }
 
                             //Remove border of the paper itself that is clean
                             if (bLeft <= bRight && bTop <= bBottom && Copy1 > 0)
                             {
-                                Copy2 = RecoIP.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
+                                Copy2 = RavenImaging.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
 
                             }
 
                             //Get real image
-                            int Photostat = RecoIP.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
+                            int Photostat = RavenImaging.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
 
-                            RecoIP.ImgInvert(Photostat);
+                            RavenImaging.ImgInvert(Photostat);
 
                             // Refine threshold supported. 
 
@@ -3935,37 +3881,37 @@ namespace RAVEN
                                 if (conversionSettings?.Type == "RDynamic")
                                     Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
                                 else
-                                    RecoIP.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
+                                    RavenImaging.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
                                 sw.Stop();
                                 StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
                             }
 
                             if (despeckle > 0 && RefineThreshold == false)
                             {
-                                RecoIP.ImgDespeckle(Photostat, despeckle, despeckle);
+                                RavenImaging.ImgDespeckle(Photostat, despeckle, despeckle);
                             }
 
-                            RecoIP.ImgRemoveBlackWires(Photostat);
+                            RavenImaging.ImgRemoveBlackWires(Photostat);
 
-                            int PhHeight = RecoIP.ImgGetHeight(Photostat) - 10;
+                            int PhHeight = RavenImaging.ImgGetHeight(Photostat) - 10;
                             int PhRatio = PhHeight / 5;
                             int phBreaks = PhHeight - 15000;
 
-                            RecoIP.ImgRemoveVerticalLines(Photostat, PhHeight, phBreaks, PhRatio, false, true);
+                            RavenImaging.ImgRemoveVerticalLines(Photostat, PhHeight, phBreaks, PhRatio, false, true);
 
-                            RecoIP.ImgAdaptiveThresholdAverage(tImageHandle, 7, 7, -1, -1);
-                            RecoIP.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
-                            RecoIP.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
+                            RavenImaging.ImgAdaptiveThresholdAverage(tImageHandle, 7, 7, -1, -1);
+                            RavenImaging.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
+                            RavenImaging.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
 
                             // Put photostat back in 
 
-                            RecoIP.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
-                            RecoIP.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
-                            RecoIP.ImgAddCopy(tImageHandle, Copy1, aLeft, aTop);
+                            RavenImaging.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
+                            RavenImaging.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
+                            RavenImaging.ImgAddCopy(tImageHandle, Copy1, aLeft, aTop);
 
-                            RecoIP.ImgDelete(Photostat);
-                            RecoIP.ImgDelete(Copy2);
-                            RecoIP.ImgDelete(Copy1);
+                            RavenImaging.ImgDelete(Photostat);
+                            RavenImaging.ImgDelete(Copy2);
+                            RavenImaging.ImgDelete(Copy1);
 
                             StatusUpdate();
                         }
@@ -3979,54 +3925,69 @@ namespace RAVEN
                     // Refine threshold is set - we need to copy / then convert / preserve the greyscale for the filter.
                     if (RefineThreshold == true)
                     {                      
-                        GreyscaleForRefine = RecoIP.ImgCopy(ImageHandle, 0, 0, 0, 0);
+                        GreyscaleForRefine = RavenImaging.ImgCopy(ImageHandle, 0, 0, 0, 0);
 
                         // Convert to greyscale if color
-                        if (RecoIP.ImgGetBitsPixel(GreyscaleForRefine) == 24)
+                        if (RavenImaging.ImgGetBitsPixel(GreyscaleForRefine) == 24)
                         {
-                            RecoIP.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
+                            RavenImaging.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
                         }
 
                     }
                
                     if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
                     {
-                        // Pure C# path — threshold in foreground, save in background
+                        // Pure C# path — threshold + save, then display
                         OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness,
                             RefineThreshold, refinetolerance);
-                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        OpenThresholdBridge.WaitForPendingSave();
+                        long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
                         string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
+                        _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
 
                         // Release the handles we opened before this block
-                        if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
-                        if (TifHandle    != 0) { RecoIP.ImgDelete(TifHandle);    TifHandle    = 0; }
-                        return; // TIF saving in background — display from memory in ThresholdMe
+                        if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
+                        if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
+                        return;
                     }
 
                     {
-                        var sw = System.Diagnostics.Stopwatch.StartNew();
-                        RecoIP.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
-                        sw.Stop();
-                        StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
-                    }
+                        var swThresh = System.Diagnostics.Stopwatch.StartNew();
+                        RavenImaging.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
+                        swThresh.Stop();
+                        long dynThreshMs = swThresh.ElapsedMilliseconds;
 
-                    if (RefineThreshold == true)
-                    {
-                        RecoIP.ImgRefineThreshold(tImageHandle, GreyscaleForRefine, this.F2Settings.Tolerance);
-                        RecoIP.ImgDelete(GreyscaleForRefine);
-                    }
+                        long dynRefineMs = 0;
+                        if (RefineThreshold == true)
+                        {
+                            var swRefine = System.Diagnostics.Stopwatch.StartNew();
+                            RavenImaging.ImgRefineThreshold(tImageHandle, GreyscaleForRefine, this.F2Settings.Tolerance);
+                            swRefine.Stop();
+                            dynRefineMs = swRefine.ElapsedMilliseconds;
+                            RavenImaging.ImgDelete(GreyscaleForRefine);
+                        }
 
-                    if (despeckle > 0 && despeckle < 10)
-                    {
-                        RecoIP.ImgDespeckle(tImageHandle, despeckle, despeckle);
+                        long dynDespeckleMs = 0;
+                        if (despeckle > 0 && despeckle < 10)
+                        {
+                            var swDesp = System.Diagnostics.Stopwatch.StartNew();
+                            RavenImaging.ImgDespeckle(tImageHandle, despeckle, despeckle);
+                            swDesp.Stop();
+                            dynDespeckleMs = swDesp.ElapsedMilliseconds;
+                        }
+
+                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                        string detail = $"thresh:{dynThreshMs}";
+                        if (dynRefineMs > 0) detail += $" refine:{dynRefineMs}";
+                        if (dynDespeckleMs > 0) detail += $" despeckle:{dynDespeckleMs}";
+                        _lastThresholdDetail = $"{dynThreshMs + dynRefineMs + dynDespeckleMs}ms {bits} ({detail})";
                     }
 
                 }
                 // Set Tif handle which will get saved as the thresholded image handle. 
 
                 // If no SBB - we set tImageHandle to our thresholded full image
-                if (SBB == false) { TifHandle = RecoIP.ImgCopy(tImageHandle, 0, 0, 0, 0); }
+                if (SBB == false) { TifHandle = RavenImaging.ImgCopy(tImageHandle, 0, 0, 0, 0); }
 
                 if (SBB == true) 
                 { 
@@ -4039,10 +4000,10 @@ namespace RAVEN
                     try
                     {
                         // Skip over corrupted .ml1 files
-                        TifHandle = RecoIP.ImgOpen(inputSBB, 0);
+                        TifHandle = RavenImaging.ImgOpen(inputSBB, 0);
                         if (NegativeImage == true)
                         {
-                            RecoIP.ImgInvert(TifHandle);
+                            RavenImaging.ImgInvert(TifHandle);
                         }
                     }
                     catch
@@ -4061,7 +4022,7 @@ namespace RAVEN
                 {
                     MessageBox.Show("JPG & TIF Image Dimensions don't match!");
                     ClearJPGCache();
-                    RecoIP.ImgDelete(TifHandle);
+                    RavenImaging.ImgDelete(TifHandle);
 
                     return;
                 }
@@ -4079,18 +4040,19 @@ namespace RAVEN
                         OpenThresholdBridge.ApplyThresholdToFilePartial(inputJPG, outputTIF,
                             X1, Y1, X2, Y2, 7, 7, contrast, brightness,
                             RefineThreshold, refinetolerance);
+                    OpenThresholdBridge.WaitForPendingSave();
                     {
-                        long frontEnd = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs;
+                        long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
                         string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        _lastThresholdDetail = $"{frontEnd}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:bg)";
+                        _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
                     }
 
-                    if (tImageHandle != 0) { RecoIP.ImgDelete(tImageHandle); tImageHandle = 0; }
-                    if (TifHandle != 0) { RecoIP.ImgDelete(TifHandle); TifHandle = 0; }
-                    return; // TIF saving in background — display from memory in ThresholdMe
+                    if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
+                    if (TifHandle != 0) { RavenImaging.ImgDelete(TifHandle); TifHandle = 0; }
+                    return;
                 }
 
-                // Non-RDynamic partial: existing RecoIP handle pipeline
+                // Non-RDynamic partial: existing RavenImaging handle pipeline
                 int ImageHandlePartial = 0;
 
                 var currentPartialDims = (X1, Y1, X2, Y2);
@@ -4105,11 +4067,11 @@ namespace RAVEN
                 {
                     if (CachedPartialImageHandle != 0)
                     {
-                        RecoIP.ImgDelete(CachedPartialImageHandle);
+                        RavenImaging.ImgDelete(CachedPartialImageHandle);
                         CachedPartialImageHandle = 0;
                     }
 
-                    ImageHandlePartial = RecoIP.ImgCopy(ImageHandle, X1, Y1, X2, Y2);
+                    ImageHandlePartial = RavenImaging.ImgCopy(ImageHandle, X1, Y1, X2, Y2);
                     CachedPartialImageHandle = ImageHandlePartial;
                     CachedPartialImageDimensions = currentPartialDims;
 
@@ -4117,7 +4079,7 @@ namespace RAVEN
                     // If isNegative set - then invert the area
                     if (NegativeImage == true)
                     {
-                        RecoIP.ImgInvert(ImageHandlePartial);
+                        RavenImaging.ImgInvert(ImageHandlePartial);
                     }
                 }
 
@@ -4126,48 +4088,62 @@ namespace RAVEN
                 // Refine threshold is set - we need to copy / then convert / preserve the greyscale for the filter.
                 if (RefineThreshold == true)
                 {
-                    GreyscaleForRefine = RecoIP.ImgDuplicate(ImageHandlePartial);
+                    GreyscaleForRefine = RavenImaging.ImgDuplicate(ImageHandlePartial);
 
-                    int nBits = RecoIP.ImgGetBitsPixel(GreyscaleForRefine);
+                    int nBits = RavenImaging.ImgGetBitsPixel(GreyscaleForRefine);
                     // If color image, convert to greyscale. 24 = color, 8 = greyscale.
                     if (nBits == 24)
                     {
-                        RecoIP.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
+                        RavenImaging.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
                     }
                 }
 
                 // Caching the JPG we loaded so we copy this since it gets thresholded. Only if not SBB (no thresholding in SBB)
                 int ImageHandleThrowAway = 0;
 
-                ImageHandleThrowAway = RecoIP.ImgDuplicate(ImageHandlePartial);
+                ImageHandleThrowAway = RavenImaging.ImgDuplicate(ImageHandlePartial);
                 {
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    RecoIP.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
-                    sw.Stop();
-                    StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
+                    var swThresh = System.Diagnostics.Stopwatch.StartNew();
+                    RavenImaging.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
+                    swThresh.Stop();
+                    long dynThreshMs = swThresh.ElapsedMilliseconds;
+
+                    long dynRefineMs = 0;
+                    // Refine threshold cont
+                    if (RefineThreshold == true)
+                    {
+                        // 10 seems to be the sweet spot for not losing data and pulling stuff out. It will be noisy but can be combined with a Despekle to get good results.
+                        var swRefine = System.Diagnostics.Stopwatch.StartNew();
+                        RavenImaging.ImgRefineThreshold(ImageHandleThrowAway, GreyscaleForRefine, refinetolerance);
+                        swRefine.Stop();
+                        dynRefineMs = swRefine.ElapsedMilliseconds;
+                        RavenImaging.ImgDelete(GreyscaleForRefine);
+                    }
+
+                    long dynDespeckleMs = 0;
+                    // If despeckle is set - do that
+                    if (despeckle > 0)
+                    {
+                        var swDesp = System.Diagnostics.Stopwatch.StartNew();
+                        RavenImaging.ImgDespeckle(ImageHandleThrowAway, despeckle, despeckle);
+                        swDesp.Stop();
+                        dynDespeckleMs = swDesp.ElapsedMilliseconds;
+                    }
+
+                    string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                    string detail = $"thresh:{dynThreshMs}";
+                    if (dynRefineMs > 0) detail += $" refine:{dynRefineMs}";
+                    if (dynDespeckleMs > 0) detail += $" despeckle:{dynDespeckleMs}";
+                    _lastThresholdDetail = $"{dynThreshMs + dynRefineMs + dynDespeckleMs}ms {bits} ({detail})";
                 }
 
-                // Refine threshold cont
-                if (RefineThreshold == true)
-                {
-                    // 10 seems to be the sweet spot for not losing data and pulling stuff out. It will be noisy but can be combined with a Despekle to get good results.
-                    RecoIP.ImgRefineThreshold(ImageHandleThrowAway, GreyscaleForRefine, refinetolerance);
-                    RecoIP.ImgDelete(GreyscaleForRefine);
-                }
-
-                // If despeckle is set - do that
-                if (despeckle > 0)
-                {
-                   RecoIP.ImgDespeckle(ImageHandleThrowAway, despeckle, despeckle);
-                }
-
-                // RecoIP.ImgSaveAsTif(ImageHandleThrowAway, TempPartialTifFile, 0, 0);
-                RecoIP.ImgAddCopy(TifHandle, ImageHandleThrowAway, X1, Y1);
+                // RavenImaging.ImgSaveAsTif(ImageHandleThrowAway, TempPartialTifFile, 0, 0);
+                RavenImaging.ImgAddCopy(TifHandle, ImageHandleThrowAway, X1, Y1);
 
                 // This is now cached and should be cleaned up from other places.
-                // RecoIP.ImgDelete(ImageHandlePartial); // Clean up partial image handle right after its use
+                // RavenImaging.ImgDelete(ImageHandlePartial); // Clean up partial image handle right after its use
 
-                RecoIP.ImgDelete(ImageHandleThrowAway);
+                RavenImaging.ImgDelete(ImageHandleThrowAway);
             }
 
             // Note: Removed JPG cropping during threshold operation
@@ -4182,25 +4158,31 @@ namespace RAVEN
                     return; 
                 }
 
-                sbbFull = RecoIP.ImgOpen(inputSBB, 0);
-                sbbPartial = RecoIP.ImgCopy(sbbFull, X1, Y1, X2, Y2);
+                sbbFull = RavenImaging.ImgOpen(inputSBB, 0);
+                sbbPartial = RavenImaging.ImgCopy(sbbFull, X1, Y1, X2, Y2);
                 
                 if (NegativeImage == true)
                 {
-                    RecoIP.ImgInvert(sbbPartial);
+                    RavenImaging.ImgInvert(sbbPartial);
                 }
-                RecoIP.ImgAddCopy(TifHandle, sbbPartial, X1, Y1);                
+                RavenImaging.ImgAddCopy(TifHandle, sbbPartial, X1, Y1);                
 
             }
 
             // Save the final thresholded TIF image
-            RecogSaveImage(TifHandle, outputTIF);
+            {
+                var swSave = System.Diagnostics.Stopwatch.StartNew();
+                RecogSaveImage(TifHandle, outputTIF);
+                swSave.Stop();
+                if (_lastThresholdDetail != null)
+                    _lastThresholdDetail = _lastThresholdDetail.Replace(")", $" save:{swSave.ElapsedMilliseconds})");
+            }
 
-            RecoIP.ImgDelete(sbbFull);
-            RecoIP.ImgDelete(sbbPartial); 
+            RavenImaging.ImgDelete(sbbFull);
+            RavenImaging.ImgDelete(sbbPartial); 
             
-            if (tImageHandle != 0) RecoIP.ImgDelete(tImageHandle);
-            if (TifHandle != 0) RecoIP.ImgDelete(TifHandle); // Clean up TIF image handle if it was used
+            if (tImageHandle != 0) RavenImaging.ImgDelete(tImageHandle);
+            if (TifHandle != 0) RavenImaging.ImgDelete(TifHandle); // Clean up TIF image handle if it was used
         }
 
         public bool IsValidTif(string filePath)
@@ -4409,12 +4391,12 @@ namespace RAVEN
         {
             if (this.CachedJPG > 0)
             {
-                RecoIP.ImgDelete(CachedJPG);
+                RavenImaging.ImgDelete(CachedJPG);
                 this.CachedJPG = 0;
             }
             if (this.CachedPartialImageHandle > 0)
             {
-                RecoIP.ImgDelete(CachedPartialImageHandle);
+                RavenImaging.ImgDelete(CachedPartialImageHandle);
                 this.CachedPartialImageHandle = 0; // Reset the handle
                 this.CachedPartialImageDimensions = (0, 0, 0, 0);
             }

@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
 
 namespace RAVEN
 {
@@ -64,11 +62,19 @@ namespace RAVEN
                 if (!File.Exists(output)) { Log("ERROR: output file was not created"); return; }
 
                 // Verify output pixels are strictly binary
-                using var resultMat = CvInvoke.Imread(output, ImreadModes.Grayscale);
+                using var resultBmp = new System.Drawing.Bitmap(output);
                 int black = 0, white = 0, bad = 0;
-                byte[] resultPixels = new byte[resultMat.Width * resultMat.Height];
-                for (int y = 0; y < resultMat.Height; y++)
-                    Marshal.Copy(resultMat.DataPointer + y * resultMat.Step, resultPixels, y * resultMat.Width, resultMat.Width);
+                byte[] resultPixels;
+                {
+                    int rw = resultBmp.Width, rh = resultBmp.Height;
+                    var bd = resultBmp.LockBits(new System.Drawing.Rectangle(0, 0, rw, rh),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+                    resultPixels = new byte[rw * rh];
+                    for (int y = 0; y < rh; y++)
+                        System.Runtime.InteropServices.Marshal.Copy(bd.Scan0 + y * bd.Stride, resultPixels, y * rw, rw);
+                    resultBmp.UnlockBits(bd);
+                }
                 foreach (byte p in resultPixels)
                 {
                     if      (p == 0)   black++;
@@ -109,24 +115,28 @@ namespace RAVEN
                 Log($"Input:  {input}");
                 Log($"Params: w={w} h={h} contrast={contrast} brightness={brightness}");
 
-                using var mat = CvInvoke.Imread(input, ImreadModes.Grayscale);
-                if (mat.IsEmpty) { Log("ERROR: Could not load image."); return; }
+                using var bmp = new System.Drawing.Bitmap(input);
+                if (bmp == null) { Log("ERROR: Could not load image."); return; }
 
-                int width = mat.Width, height = mat.Height;
+                int width = bmp.Width, height = bmp.Height;
                 Log($"Image:  {width}x{height} ({width * height / 1_000_000.0:F1}MP)");
 
                 byte[] gray = new byte[width * height];
-                for (int y = 0; y < height; y++)
-                    Marshal.Copy(mat.DataPointer + y * mat.Step, gray, y * width, width);
+                {
+                    var bd = bmp.LockBits(new System.Drawing.Rectangle(0, 0, width, height),
+                        System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                        System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+                    for (int y = 0; y < height; y++)
+                        System.Runtime.InteropServices.Marshal.Copy(bd.Scan0 + y * bd.Stride, gray, y * width, width);
+                    bmp.UnlockBits(bd);
+                }
 
                 var sw = Stopwatch.StartNew();
-                byte[] binary = DynamicThreshold.Apply(gray, width, height, w, h, contrast, brightness);
+                byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, w, h, contrast, brightness);
                 sw.Stop();
                 Log($"Threshold: {sw.ElapsedMilliseconds}ms");
 
-                using var outMat = new Mat(height, width, DepthType.Cv8U, 1);
-                Marshal.Copy(binary, 0, outMat.DataPointer, binary.Length);
-                CvInvoke.Imwrite(output, outMat);
+                RavenImaging.SaveAsCcitt4Tif(binary, width, height, output);
                 Log($"Saved:  {output}");
                 Log("OK");
             }
