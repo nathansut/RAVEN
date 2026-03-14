@@ -50,63 +50,48 @@ namespace RAVEN
             }
         }
 
+        // Maps each F-key section to its corresponding UI controls.
+        private (ComboBox type, CheckBox negative, TextBox contrast, TextBox brightness,
+                 TextBox despeckle, TextBox filterStepup, TextBox tolerance, TextBox despeckleFilter)
+            GetControlsForKey(string key)
+        {
+            return key switch
+            {
+                "F2" => (F2ActiveType, F2Negative, textBoxF2Contrast, textBoxF2Brightness,
+                         textBoxF2Despeckle, textBoxF2FilterThresholdStepup, textBoxF2ToleranceFilter, textBoxF2DespeckleFilter),
+                "F3" => (F3ActiveType, F3Negative, textBoxF3Contrast, textBoxF3Brightness,
+                         textBoxF3Despeckle, textBoxF3FilterThresholdStepup, textBoxF3ToleranceFilter, textBoxF3DespeckleFilter),
+                "F4" => (F4ActiveType, F4Negative, textBoxF4Contrast, textBoxF4Brightness,
+                         textBoxF4Despeckle, textBoxF4FilterThresholdStepup, textBoxF4ToleranceFilter, textBoxF4DespeckleFilter),
+                "F5" => (F5ActiveType, F5Negative, textBoxF5Contrast, textBoxF5Brightness,
+                         textBoxF5Despeckle, textBoxF5FilterThresholdStepup, textBoxF5ToleranceFilter, textBoxF5DespeckleFilter),
+                "F6" => (F6ActiveType, F6Negative, textBoxF6Contrast, textBoxF6Brightness,
+                         textBoxF6Despeckle, textBoxF6FilterThresholdStepup, textBoxF6ToleranceFilter, textBoxF6DespeckleFilter),
+                _ => throw new ArgumentException($"Unknown key: {key}")
+            };
+        }
+
+        private static readonly string[] FKeys = { "F2", "F3", "F4", "F5", "F6" };
+
         private void LoadSettings()
         {
             string iniFilePath = System.IO.Path.Combine(Application.StartupPath, "settings.ini");
 
             var parser = new FileIniDataParser();
-            IniData data = parser.ReadFile(iniFilePath); // Replace 'this.iniFilePath' with the actual path to your INI file
+            IniData data = parser.ReadFile(iniFilePath);
 
-            // Load 'AreaConv' settings
-            SetComboBoxSelectedItem(F2ActiveType, data["F2"]["Type"]);
-            F2Negative.Checked = data["F2"]["NegativeImage"] == "Y";
-            textBoxF2Contrast.Text = data["F2"]["Contrast"];
-            textBoxF2Brightness.Text = data["F2"]["Brightness"];
-            textBoxF2Despeckle.Text = data["F2"]["Despeckle"];
-            textBoxF2FilterThresholdStepup.Text = data["F2"]["FilterThresholdStepup"];
-            textBoxF2ToleranceFilter.Text = data["F2"]["Tolerance"];
-            textBoxF2DespeckleFilter.Text = data["F2"]["DespeckleFilter"];
-
-            // Load 'F3' settings
-            SetComboBoxSelectedItem(F3ActiveType, data["F3"]["Type"]);
-            F3Negative.Checked = data["F3"]["NegativeImage"] == "Y";
-            textBoxF3Contrast.Text = data["F3"]["Contrast"];
-            textBoxF3Brightness.Text = data["F3"]["Brightness"];
-            textBoxF3Despeckle.Text = data["F3"]["Despeckle"];
-            textBoxF3FilterThresholdStepup.Text = data["F3"]["FilterThresholdStepup"];
-            textBoxF3ToleranceFilter.Text = data["F3"]["Tolerance"];
-            textBoxF3DespeckleFilter.Text = data["F3"]["DespeckleFilter"];
-
-            // Load 'F4' settings
-            SetComboBoxSelectedItem(F4ActiveType, data["F4"]["Type"]);
-            F4Negative.Checked = data["F4"]["NegativeImage"] == "Y";
-            textBoxF4Contrast.Text = data["F4"]["Contrast"];
-            textBoxF4Brightness.Text = data["F4"]["Brightness"];
-            textBoxF4Despeckle.Text = data["F4"]["Despeckle"];
-            textBoxF4FilterThresholdStepup.Text = data["F4"]["FilterThresholdStepup"];
-            textBoxF4ToleranceFilter.Text = data["F4"]["Tolerance"];
-            textBoxF4DespeckleFilter.Text = data["F4"]["DespeckleFilter"];
-
-            // Load 'F5' settings
-            SetComboBoxSelectedItem(F5ActiveType, data["F5"]["Type"]);
-            F5Negative.Checked = data["F5"]["NegativeImage"] == "Y";
-            textBoxF5Contrast.Text = data["F5"]["Contrast"];
-            textBoxF5Brightness.Text = data["F5"]["Brightness"];
-            textBoxF5Despeckle.Text = data["F5"]["Despeckle"];
-            textBoxF5FilterThresholdStepup.Text = data["F5"]["FilterThresholdStepup"];
-            textBoxF5ToleranceFilter.Text = data["F5"]["Tolerance"];
-            textBoxF5DespeckleFilter.Text = data["F5"]["DespeckleFilter"];
-
-            // Load 'F6' settings
-            SetComboBoxSelectedItem(F6ActiveType, data["F6"]["Type"]);
-            F6Negative.Checked = data["F6"]["NegativeImage"] == "Y";
-            textBoxF6Contrast.Text = data["F6"]["Contrast"];
-            textBoxF6Brightness.Text = data["F6"]["Brightness"];
-            textBoxF6Despeckle.Text = data["F6"]["Despeckle"];
-            textBoxF6FilterThresholdStepup.Text = data["F6"]["FilterThresholdStepup"];
-            textBoxF6ToleranceFilter.Text = data["F6"]["Tolerance"];
-            textBoxF6DespeckleFilter.Text = data["F6"]["DespeckleFilter"];
-
+            foreach (string key in FKeys)
+            {
+                var c = GetControlsForKey(key);
+                SetComboBoxSelectedItem(c.type, data[key]["Type"]);
+                c.negative.Checked = data[key]["NegativeImage"] == "Y";
+                c.contrast.Text = data[key]["Contrast"];
+                c.brightness.Text = data[key]["Brightness"];
+                c.despeckle.Text = data[key]["Despeckle"];
+                c.filterStepup.Text = data[key]["FilterThresholdStepup"];
+                c.tolerance.Text = data[key]["Tolerance"];
+                c.despeckleFilter.Text = data[key]["DespeckleFilter"];
+            }
         }
 
         private void SetComboBoxSelectedItem(ComboBox comboBox, string value)
@@ -165,167 +150,79 @@ namespace RAVEN
             SetFieldFocus(this.textBoxF4Contrast);
         }
 
+        // Maps F-key name patterns (used in control names) to their Dynamic/Refine labels.
+        // F2 controls use "F2" or "AreaConv" in their names.
+        private (Label dynamic, Label refine) GetLabelsForKey(string keyPattern)
+        {
+            return keyPattern switch
+            {
+                "F2" => (AreaConvDyncamicLabel, AreaConvRefineLabel),
+                "F3" => (F3DyncamicLabel, F3RefineLabel),
+                "F4" => (F4DyncamicLabel, F4RefineLabel),
+                "F5" => (F5DyncamicLabel, F5RefineLabel),
+                "F6" => (F6DyncamicLabel, F6RefineLabel),
+                _ => (null, null)
+            };
+        }
+
+        // Returns the F-key pattern that matches a control name, or null.
+        private string GetKeyPatternForControl(Control ctrl)
+        {
+            if (ctrl == null) return null;
+            string name = ctrl.Name;
+            // F2 controls may use "F2" or "AreaConv" prefix
+            if (name.Contains("F2") || name.Contains("AreaConv")) return "F2";
+            foreach (string key in FKeys)
+                if (name.Contains(key)) return key;
+            return null;
+        }
+
+        private void SetLabelColor(string keyPattern, bool isFilter, Color color)
+        {
+            var (dynamic, refine) = GetLabelsForKey(keyPattern);
+            if (dynamic == null) return;
+            if (!isFilter)
+            {
+                dynamic.BackColor = color;
+                dynamic.Refresh();
+            }
+            else
+            {
+                refine.BackColor = color;
+                refine.Refresh();
+            }
+        }
+
         public void SetFieldFocus(Control controlToFocus)
         {
-            // ClearFieldFocus(); // Resets the visual state of previously focused controls. Don't think I need this - just reset the current control color back before going to next one. 
-            if (controlToFocus != null)
+            if (controlToFocus == null) return;
+
+            // Un-highlight previous control and its group label
+            if (this.currentlyFocusedControl != null)
             {
-                
-                // If control prev highlighted, refresh group & control color back to system color
-                if (this.currentlyFocusedControl != null)
-                {
-                    this.currentlyFocusedControl.BackColor = SystemColors.Control;
-                    this.currentlyFocusedControl.Refresh();
-
-                    // Area Conv
-                    if (this.currentlyFocusedControl.Name.Contains("F2"))
-                    {
-                        if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                        {
-                            AreaConvDyncamicLabel.BackColor = SystemColors.Control; 
-                            AreaConvDyncamicLabel.Refresh();
-                        }
-                        else
-                        {
-                            AreaConvRefineLabel.BackColor = SystemColors.Control;
-                            AreaConvRefineLabel.Refresh();
-                        }
-                    }
-
-                    // F3
-
-                    if (this.currentlyFocusedControl.Name.Contains("F3"))
-                    {
-                        if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                        {
-                            F3DyncamicLabel.BackColor = SystemColors.Control;
-                            F3RefineLabel.Refresh();
-                        }
-                        else
-                        {
-                            F3RefineLabel.BackColor = SystemColors.Control;
-                            F3RefineLabel.Refresh();
-                        }
-                    }
-
-                    // F4
-                    if (this.currentlyFocusedControl.Name.Contains("F4"))
-                    {
-                        if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                        {
-                            F4DyncamicLabel.BackColor = SystemColors.Control;
-                            F4RefineLabel.Refresh();
-                        }
-                        else
-                        {
-                            F4RefineLabel.BackColor = SystemColors.Control;
-                            F4RefineLabel.Refresh();
-                        }
-                    }
-
-                    // F5
-                    if (this.currentlyFocusedControl.Name.Contains("F5"))
-                    {
-                        if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                        {
-                            F5DyncamicLabel.BackColor = SystemColors.Control;
-                            F4RefineLabel.Refresh();
-                        }
-                        else
-                        {
-                            F5RefineLabel.BackColor = SystemColors.Control;
-                            F5RefineLabel.Refresh();
-                        }
-                    }
-
-                    // F6
-                    if (this.currentlyFocusedControl.Name.Contains("F6"))
-                    {
-                        if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                        {
-                            F6DyncamicLabel.BackColor = SystemColors.Control;
-                            F6RefineLabel.Refresh();
-                        }
-                        else
-                        {
-                            F6RefineLabel.BackColor = SystemColors.Control;
-                            F6RefineLabel.Refresh();
-                        }
-                    }
-
-
-                }
-
-
-                //Set next control color
-                this.currentlyFocusedControl = controlToFocus;               
-                this.currentlyFocusedControl.BackColor = Color.FromArgb(217, 237, 247); // Highlight the control
+                this.currentlyFocusedControl.BackColor = SystemColors.Control;
                 this.currentlyFocusedControl.Refresh();
 
-                // Check for Group Highlighting
-                if (this.currentlyFocusedControl.Name.Contains("AreaConv"))
+                string prevKey = GetKeyPatternForControl(this.currentlyFocusedControl);
+                if (prevKey != null)
                 {
-                    if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                    {
-                        AreaConvDyncamicLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                    else
-                    {
-                        AreaConvRefineLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
+                    bool isFilter = this.currentlyFocusedControl.Name.Contains("Filter");
+                    SetLabelColor(prevKey, isFilter, SystemColors.Control);
                 }
-
-                if (this.currentlyFocusedControl.Name.Contains("F3"))
-                {
-                    if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                    {
-                        F3DyncamicLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                    else
-                    {
-                        F3RefineLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                }
-
-                if (this.currentlyFocusedControl.Name.Contains("F4"))
-                {
-                    if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                    {
-                        F4DyncamicLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                    else
-                    {
-                        F4RefineLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                }
-
-                if (this.currentlyFocusedControl.Name.Contains("F5"))
-                {
-                    if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                    {
-                        F5DyncamicLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                    else
-                    {
-                        F5RefineLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                }
-
-                if (this.currentlyFocusedControl.Name.Contains("F6"))
-                {
-                    if (!this.currentlyFocusedControl.Name.Contains("Filter"))
-                    {
-                        F6DyncamicLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                    else
-                    {
-                        F6RefineLabel.BackColor = Color.FromArgb(217, 237, 247);
-                    }
-                }
-
             }
 
+            // Highlight new control
+            this.currentlyFocusedControl = controlToFocus;
+            this.currentlyFocusedControl.BackColor = Color.FromArgb(217, 237, 247);
+            this.currentlyFocusedControl.Refresh();
 
+            // Highlight group label
+            string newKey = GetKeyPatternForControl(this.currentlyFocusedControl);
+            if (newKey != null)
+            {
+                bool isFilter = this.currentlyFocusedControl.Name.Contains("Filter");
+                SetLabelColor(newKey, isFilter, Color.FromArgb(217, 237, 247));
+            }
         }
 
         public void ClearFieldFocus()
@@ -405,12 +302,18 @@ namespace RAVEN
 
 
 
-        private void ThresholdSettings_Load(object sender, EventArgs e)
+
+        // Shared handler for all TextChanged / SelectedIndexChanged events
+        private void OnSettingChanged(object sender, EventArgs e)
         {
-           
+            if (this.IsHandleCreated)
+            {
+                UpdateINIAndVariables();
+            }
         }
 
-        private void Negative_CheckedChanged(object sender, EventArgs e)
+        // Shared handler for all Negative checkbox CheckedChanged events
+        private void OnNegativeChanged(object sender, EventArgs e)
         {
             if (this.IsHandleCreated)
             {
@@ -418,8 +321,8 @@ namespace RAVEN
             }
             if (this.Owner is Form1 mainForm)
             {
-                    // Because it inverts the JPG - have to clear the cache
-                    mainForm.ClearJPGCache();               
+                // Because it inverts the JPG - have to clear the cache
+                mainForm.ClearJPGCache();
             }
         }
 
@@ -598,9 +501,6 @@ namespace RAVEN
 
             int CopyOfImage = RavenImaging.ImgDuplicate(ImageHandle);
 
-            double test = 80.0;
-
-            // RavenImaging.ImgBackTrackThresholdAverage(CopyOfImage, -1, -1, 80.0);
             RavenImaging.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
             
 
@@ -705,41 +605,8 @@ namespace RAVEN
             if (this.Owner is Form1 mainForm)
             {
                 mainForm.isJPGVisible = ShowJPG.Checked;
-                // Optionally, refresh the visibility of the JPG image in mainForm
                 mainForm.RefreshJPGVisibility();
             }
-        }
-
-        private void Despeckle_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-
-        private void label4_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        private void F3Negative_CheckedChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-            if (this.Owner is Form1 mainForm)
-            {
-                // Because it inverts the JPG - have to clear the cache
-                mainForm.ClearJPGCache();
-            }
-        }
-
-        private void button1_Click_1(object sender, EventArgs e)
-        {
-            UpdateINIAndVariables();
         }
 
         public void UpdateINIAndVariables()
@@ -748,70 +615,43 @@ namespace RAVEN
             
         }
 
+        private static int ParseIntOrZero(TextBox tb)
+        {
+            return int.TryParse(tb.Text, out int val) ? val : 0;
+        }
+
+        private Form1.ConversionSettings GetSettingsForKey(string key)
+        {
+            var mainForm = this.Owner as Form1;
+            return key switch
+            {
+                "F2" => mainForm.F2Settings,
+                "F3" => mainForm.F3Settings,
+                "F4" => mainForm.F4Settings,
+                "F5" => mainForm.F5Settings,
+                "F6" => mainForm.F6Settings,
+                _ => null
+            };
+        }
+
         public void SetVariables()
         {
             var mainForm = this.Owner as Form1;
+            if (mainForm == null) return;
 
-            // 'F2' settings (replacement for 'AreaConv' settings)
-            mainForm.F2Settings.Type = F2ActiveType.SelectedItem?.ToString() ?? "Dynamic";
-            mainForm.F2Settings.NegativeImage = F2Negative.Checked;
-            mainForm.F2Settings.Contrast = int.TryParse(textBoxF2Contrast.Text, out _) ? int.Parse(textBoxF2Contrast.Text) : 0;
-            mainForm.F2Settings.Brightness = int.TryParse(textBoxF2Brightness.Text, out _) ? int.Parse(textBoxF2Brightness.Text) : 0;
-            mainForm.F2Settings.Despeckle = int.TryParse(textBoxF2Despeckle.Text, out _) ? int.Parse(textBoxF2Despeckle.Text) : 0;
-            mainForm.F2Settings.FilterThresholdStepup = int.TryParse(textBoxF2FilterThresholdStepup.Text, out _) ? int.Parse(textBoxF2FilterThresholdStepup.Text) : 0;
-            mainForm.F2Settings.Tolerance = int.TryParse(textBoxF2ToleranceFilter.Text, out _) ? int.Parse(textBoxF2ToleranceFilter.Text) : 0;
-            mainForm.F2Settings.DespeckleFilter = int.TryParse(textBoxF2DespeckleFilter.Text, out _) ? int.Parse(textBoxF2DespeckleFilter.Text) : 0;
-
-
-            // Assuming 'mainForm' is an instance of a class where these properties are defined
-            // and UI elements like 'Negative', 'textBoxContrast', etc., are from which values are fetched
-
-            // 'F3' settings
-            mainForm.F3Settings.Type = F3ActiveType.SelectedItem?.ToString() ?? "Dynamic";
-            mainForm.F3Settings.NegativeImage = F3Negative.Checked;
-            mainForm.F3Settings.Contrast = int.TryParse(textBoxF3Contrast.Text, out _) ? int.Parse(textBoxF3Contrast.Text) : 0;
-            mainForm.F3Settings.Brightness = int.TryParse(textBoxF3Brightness.Text, out _) ? int.Parse(textBoxF3Brightness.Text) : 0;
-            mainForm.F3Settings.Despeckle = int.TryParse(textBoxF3Despeckle.Text, out _) ? int.Parse(textBoxF3Despeckle.Text) : 0;
-            mainForm.F3Settings.FilterThresholdStepup = int.TryParse(textBoxF3FilterThresholdStepup.Text, out _) ? int.Parse(textBoxF3FilterThresholdStepup.Text) : 0;
-            mainForm.F3Settings.Tolerance = int.TryParse(textBoxF3ToleranceFilter.Text, out _) ? int.Parse(textBoxF3ToleranceFilter.Text) : 0;
-            mainForm.F3Settings.DespeckleFilter = int.TryParse(textBoxF3DespeckleFilter.Text, out _) ? int.Parse(textBoxF3DespeckleFilter.Text) : 0;
-
-            // 'F4' settings
-
-            mainForm.F4Settings.Type = F4ActiveType.SelectedItem?.ToString() ?? "Dynamic";
-            mainForm.F4Settings.NegativeImage = F4Negative.Checked;
-            mainForm.F4Settings.Contrast = int.TryParse(textBoxF4Contrast.Text, out _) ? int.Parse(textBoxF4Contrast.Text) : 0;
-            mainForm.F4Settings.Brightness = int.TryParse(textBoxF4Brightness.Text, out _) ? int.Parse(textBoxF4Brightness.Text) : 0;
-            mainForm.F4Settings.Despeckle = int.TryParse(textBoxF4Despeckle.Text, out _) ? int.Parse(textBoxF4Despeckle.Text) : 0;
-            mainForm.F4Settings.FilterThresholdStepup = int.TryParse(textBoxF4FilterThresholdStepup.Text, out _) ? int.Parse(textBoxF4FilterThresholdStepup.Text) : 0;
-            mainForm.F4Settings.Tolerance = int.TryParse(textBoxF4ToleranceFilter.Text, out _) ? int.Parse(textBoxF4ToleranceFilter.Text) : 0;
-            mainForm.F4Settings.DespeckleFilter = int.TryParse(textBoxF4DespeckleFilter.Text, out _) ? int.Parse(textBoxF4DespeckleFilter.Text) : 0;
-
-
-
-            // 'F5' settings
-
-            mainForm.F5Settings.Type = F5ActiveType.SelectedItem?.ToString() ?? "Dynamic";
-            mainForm.F5Settings.NegativeImage = F5Negative.Checked;
-            mainForm.F5Settings.Contrast = int.TryParse(textBoxF5Contrast.Text, out _) ? int.Parse(textBoxF5Contrast.Text) : 0;
-            mainForm.F5Settings.Brightness = int.TryParse(textBoxF5Brightness.Text, out _) ? int.Parse(textBoxF5Brightness.Text) : 0;
-            mainForm.F5Settings.Despeckle = int.TryParse(textBoxF5Despeckle.Text, out _) ? int.Parse(textBoxF5Despeckle.Text) : 0;
-            mainForm.F5Settings.FilterThresholdStepup = int.TryParse(textBoxF5FilterThresholdStepup.Text, out _) ? int.Parse(textBoxF5FilterThresholdStepup.Text) : 0;
-            mainForm.F5Settings.Tolerance = int.TryParse(textBoxF5ToleranceFilter.Text, out _) ? int.Parse(textBoxF5ToleranceFilter.Text) : 0;
-            mainForm.F5Settings.DespeckleFilter = int.TryParse(textBoxF5DespeckleFilter.Text, out _) ? int.Parse(textBoxF5DespeckleFilter.Text) : 0;
-
-            // 'F6' settings
-
-            mainForm.F6Settings.Type = F6ActiveType.SelectedItem?.ToString() ?? "Dynamic";
-            mainForm.F6Settings.NegativeImage = F6Negative.Checked;
-            mainForm.F6Settings.Contrast = int.TryParse(textBoxF6Contrast.Text, out _) ? int.Parse(textBoxF6Contrast.Text) : 0;
-            mainForm.F6Settings.Brightness = int.TryParse(textBoxF6Brightness.Text, out _) ? int.Parse(textBoxF6Brightness.Text) : 0;
-            mainForm.F6Settings.Despeckle = int.TryParse(textBoxF6Despeckle.Text, out _) ? int.Parse(textBoxF6Despeckle.Text) : 0;
-            mainForm.F6Settings.FilterThresholdStepup = int.TryParse(textBoxF6FilterThresholdStepup.Text, out _) ? int.Parse(textBoxF6FilterThresholdStepup.Text) : 0;
-            mainForm.F6Settings.Tolerance = int.TryParse(textBoxF6ToleranceFilter.Text, out _) ? int.Parse(textBoxF6ToleranceFilter.Text) : 0;
-            mainForm.F6Settings.DespeckleFilter = int.TryParse(textBoxF6DespeckleFilter.Text, out _) ? int.Parse(textBoxF6DespeckleFilter.Text) : 0;
-
-
+            foreach (string key in FKeys)
+            {
+                var c = GetControlsForKey(key);
+                var s = GetSettingsForKey(key);
+                s.Type = c.type.SelectedItem?.ToString() ?? "Dynamic";
+                s.NegativeImage = c.negative.Checked;
+                s.Contrast = ParseIntOrZero(c.contrast);
+                s.Brightness = ParseIntOrZero(c.brightness);
+                s.Despeckle = ParseIntOrZero(c.despeckle);
+                s.FilterThresholdStepup = ParseIntOrZero(c.filterStepup);
+                s.Tolerance = ParseIntOrZero(c.tolerance);
+                s.DespeckleFilter = ParseIntOrZero(c.despeckleFilter);
+            }
         }
 
         public void AddStatusUpdate(string update, bool clearstatus = false)
@@ -886,322 +726,6 @@ namespace RAVEN
             return dict;
         }
 
-        private void F2ActiveType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }       
-        }
-
-        private void textBoxAreaConvContrast_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxAreaConvBrightness_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxAreaConvFilterThresholdStepup_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxAreaConvDespeckleFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxAreaConvToleranceFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void F3ActiveType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-
-        private void textBoxF3Contrast_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF3Despeckle_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF3Brightness_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF3FilterThresholdStepup_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF3DespeckleFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF3ToleranceFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void F4ActiveType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF4Contrast_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF4Despeckle_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF4Brightness_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void F4Negative_CheckedChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-            if (this.Owner is Form1 mainForm)
-            {
-                // Because it inverts the JPG - have to clear the cache
-                mainForm.ClearJPGCache();
-            }
-        }
-
-        private void textBoxF4FilterThresholdStepup_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF4DespeckleFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF4ToleranceFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void AreaConvThresholdGroupbox_Enter(object sender, EventArgs e)
-        {
-
-        }
-
-        private void F5ActiveType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void F5Negative_CheckedChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-            if (this.Owner is Form1 mainForm)
-            {
-                // Because it inverts the JPG - have to clear the cache
-                mainForm.ClearJPGCache();
-            }
-        }
-
-        private void F6Negative_CheckedChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-            if (this.Owner is Form1 mainForm)
-            {
-                // Because it inverts the JPG - have to clear the cache
-                mainForm.ClearJPGCache();
-            }
-        }
-
-        private void textBoxF5Contrast_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF5Despeckle_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF5Brightness_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF5FilterThresholdStepup_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF5DespeckleFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF5ToleranceFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void F6ActiveType_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6Contrast_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6Despeckle_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6Brightness_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6FilterThresholdStepup_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6DespeckleFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
-
-        private void textBoxF6ToleranceFilter_TextChanged(object sender, EventArgs e)
-        {
-            if (this.IsHandleCreated)
-            {
-                UpdateINIAndVariables();
-            }
-        }
     }
 
 }

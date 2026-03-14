@@ -298,16 +298,6 @@ namespace RAVEN
             InitializedEveryOtherPage
         }      
 
-        public struct QuickZoom
-        {
-            public bool Active;
-            public int X;
-            public int Y;
-            public bool QZoomedIn; 
-        }
-
-        
-
         public bool BatchWhiteoutMode = false;
         // Turn this on to print the bulk crop on the screen - then when active and press "W" - do BatchWhiteout
         public bool BatchWhiteoutActive = false;
@@ -321,7 +311,6 @@ namespace RAVEN
 
 
 
-        QuickZoom _QuickZoom = new QuickZoom();
 
 
 
@@ -414,7 +403,6 @@ namespace RAVEN
             Console.WriteLine($"Set working directory to: {exeDir}");
 
 
-            ChangeExeSize();
             InitializeComponent();
             InitializeConversionSettings();
 
@@ -431,11 +419,6 @@ namespace RAVEN
 
 
             keyPicture2.OnDoRightClickEvent += KeyPicture2_OnDoRightClickEvent;
-            // Start of double click quick zoom change - not finished
-            /*
-            keyPicture2.OnDoDoubleLeftClickEvent += KeyPicture2_OnDoDoubleLeftClickEvent;
-            keyPicture2.OnDoDoubleRightClickEvent += KeyPicture2_OnDoDoubleRightClickEvent;
-            */ 
 
             LineRemovalList = new List<int>();
             this.Shown += new System.EventHandler(this.Form_Shown);
@@ -515,8 +498,6 @@ namespace RAVEN
                 textBox1.Text = @"C:\temp\1a";
             }
 
-            var dummy = LargeResource.LargeString;
-
             // Attach to Load event of Form1
             // this.Load += Form1_Load;
         }
@@ -538,10 +519,6 @@ namespace RAVEN
             return File.Exists(jpgPath) ? jpgPath : tifPath;
         }
 
-        public static class LargeResource
-        {
-            public static readonly string LargeString = new string('A', 5000000); // 5 million characters
-        }
 
         private void Form_Shown(Object sender, EventArgs e)
         {
@@ -648,66 +625,7 @@ namespace RAVEN
         public string LineListToString() =>
     $"{string.Join(", ", LineRemovalList.Take(5))}{(LineRemovalList.Count > 5 ? " ..." : "")}";
 
-        // Was testing with double right clicking to zoom - disabling for now per Brent's request - 20250305
-        private void KeyPicture2_OnDoDoubleLeftClickEvent(object sender, EventArgs e)
-        {
-            /*
-            // Set QuickZoom = Active
-            _QuickZoom.Active = true;
-            
-            //If not zoomed in - return (control will zoom out). 
-            if (_QuickZoom.QZoomedIn == true)
-            {
-                //Set variable to zoomed out
-                _QuickZoom.QZoomedIn = false; 
-                return; 
-            }
 
-            int cursorX = keyPicture2.GetCursorX();
-            int cursorY = keyPicture2.GetCursorY();
-
-            // Get X / Y co-ord
-            var imageCoordinates = keyPicture2.ConvertWindowToImageCoordinates(cursorX, cursorY);
-
-            _QuickZoom.X = imageCoordinates.Item1;
-            _QuickZoom.Y = imageCoordinates.Item2;
-
-            __QuickZoom(_QuickZoom.X, _QuickZoom.Y, 750);
-            _QuickZoom.QZoomedIn = true; 
-            */ 
-
-        }
-
-
-        private void __QuickZoom(int x, int y, int offset)
-        {
-            int x1 = _QuickZoom.X - offset;
-            int y1 = _QuickZoom.Y - offset;
-            int x2 = _QuickZoom.X + offset;
-            int y2 = _QuickZoom.Y + offset;
-
-            // if X / Y 1 < 0 - change our zoom parameters to be 0 -> 1500
-
-            if (x1<0)
-            {
-                x1 = 0;
-                x2 = offset * 2; 
-            }
-            if (y1<0)
-            {
-                y1 = 0;
-                y2 = offset * 2;
-            }
-
-        }
-
-                     
-        private void KeyPicture2_OnDoDoubleRightClickEvent(object sender, EventArgs e)
-        {
-            // Am I zoomed in now?
-            MessageBox.Show("Hi");
-
-        }
 
         private void KeyPicture2_OnDoRightClickEvent(object sender, EventArgs e)
         {
@@ -873,11 +791,6 @@ namespace RAVEN
             }
         }
 
-        // May need to disable keypicture1 zoom event in the future 
-        private void KeyPicture1_OnMiddleClickEvent(object sender, EventArgs e)
-        {
-            MessageBox.Show("MiddleClick");
-        }
 
 
 
@@ -915,11 +828,6 @@ namespace RAVEN
                     // Optionally, set Handled to true to prevent furthernu processing of this key
                     e.Handled = true;
                 }
-                if (e.KeyCode == Keys.P)
-                {
-                    singleZoom(); 
-                    
-                }
                 // Check if the Page Down key is pressed
                 if (e.KeyCode == Keys.PageUp || e.KeyCode == Keys.U) // 'Next' represents the Page Down key
                 {
@@ -946,10 +854,6 @@ namespace RAVEN
                         }
                     }
                 }
-                //20240807 if (e.KeyCode == Keys.A)
-                //20240807 {
-                //20240807 FieldSettingsSetFocus(Keys.A);
-                //20240807 }
                 if (e.KeyCode == Keys.W)
                 {
                     if (this.BatchWhiteoutActive == true)
@@ -1684,114 +1588,6 @@ namespace RAVEN
             }
         }
 
-        private void MultipageModify(Keys pressedKey)
-        {
-            // [ = Initialize / Uninitialize & Clear Cordinates
-            // ] = Run & then Uninitialize 
-
-            //Was [ key pressed (initialize) & initialize not already set?
-            if (pressedKey == Keys.OemOpenBrackets)
-            {
-                if (vMultipageModifyMode == MultipageModifyMode.Uninitialized)
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.InitializedEveryPage;
-                    AddStatusUpdate("Area Conversion InitializeEveryPage");
-                }
-                else if (vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage)
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.InitializedEveryOtherPage;
-                    AddStatusUpdate("Area Conversion InitializeEveryOtherPage");
-                }
-                else
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.Uninitialized;
-                    AddStatusUpdate("Area Conversion Uninitialized", true);
-                    vMultipageModifyList.Clear();
-                }
-            }
-            
-            // If we are initialized & an F2/F3/F4 key has been pressed, we will apply the F key settings to the cordinates & add to a list. 
-            if ((this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage || this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) && (pressedKey == Keys.F2 || pressedKey == Keys.F3 || pressedKey == Keys.F4 || pressedKey == Keys.F5 || pressedKey == Keys.F6))
-            {
-                // Only works for Dynamic 
-                                
-                if (!VerifyMatchingDimensions(ImagePairs[currentImageIndex].TIF, ImagePairs[currentImageIndex].JPG))
-                {
-                    MessageBox.Show("TIF/JPG Dimensions don't match!");
-                }
-                else
-                {
-                    int _left = keyPicture2.GetSelectedLeft();
-                    int _top = keyPicture2.GetSelectedTop();
-                    int _right = keyPicture2.GetSelectedRight();
-                    int _bottom = keyPicture2.GetSelectedBottom();
-
-                    var _TempSettings = GetSettingsForKey(pressedKey);
-                    if (_TempSettings == null) return;
-
-                    if (_TempSettings.Type != "Dynamic" && _TempSettings.Type != "RDynamic")
-                    {
-                        MessageBox.Show("Only Dynamic/Open Threshold is supported.");
-                        return;
-                    }
-                    vMultipageModifyList.Add(Tuple.Create(_left, _top, _right, _bottom, _TempSettings));
-                    AddStatusUpdate("Drawbox Dimensions" + _left.ToString() + "," + _top.ToString() + "," + _right.ToString() + _bottom.ToString() + "," + pressedKey.ToString());
-
-
-
-                    // Add entry to conversion list
-                    // Can refactor later to create a ConvSettings, conditionally set them to this. Then add the touple. 
-
-                }
-                ClearSelection(); 
-            }
-
-
-
-            if ((this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage || this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) && pressedKey == Keys.OemCloseBrackets)
-            {
-
-                //Refactor to loop thru EACH IMAGE -> And THEN loop thru each box drawn
-
-                //Loop thru each image 
-                /*
-                {
-                 //Loop thru each selection
-                    {
-
-                    }
-                }
-                */
-
-
-
-                //Loops thru each box selection / F2 F3 F4 / List of areas
-                foreach (var entry in vMultipageModifyList)
-                {
-                    int left = entry.Item1;
-                    int top = entry.Item2;
-                    int right = entry.Item3;
-                    int bottom = entry.Item4;
-                    ConversionSettings _ConvSetting = entry.Item5; 
-
-                    var _imagePairs = this.ImagePairs;
-
-                    // Loop thru rest of the images, convert the areas selected. If EveryOtherPage is selected, we do every other page.
-                    int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
-
-                    // Loops thru each image - to apply our current selection box to this image
-                    for (int i = currentImageIndex; i < _imagePairs.Count; i += increment)
-                    {
-                        ThresholdMe(_ConvSetting, left, top, right, bottom, _imagePairs[i].JPG, _imagePairs[i].TIF, false, true);
-                        AddStatusUpdate($"Threshold {_imagePairs[i].JPG} {left},{top},{right},{bottom}");
-                    }
-                }
-                this.vMultipageModifyMode = MultipageModifyMode.Uninitialized;
-                AddStatusUpdate("Area Conversion Uninitialized", true);
-                RefreshDisplayImage(); 
-                // vMultipageModifyList.Clear();
-            }
-        }
 
         private void ClearSelection()
         {
@@ -1805,100 +1601,8 @@ namespace RAVEN
             thresholdSettingsForm.AddStatusUpdate(StatusUpdate, clearstatus);
         }
 
-        private void ChangeExeSize()
-        {
-            // Create a large array of integers filled with dummy data
-            int[] largeArray = new int[5000000];
-            for (int i = 0; i < largeArray.Length; i++)
-            {
-                largeArray[i] = i;
-            }
-            // This data is unused but it will increase the size of the executable
-        }
 
 
-        //Code trying to find cropbox stuff, doesn't work, leaving for future work if I want to. 
-        /*
-        private void FindBorder()
-        {
-            if (this.activecropbox == true && this.CropWidth > 0 && this.CropHeight > 0)
-            {
-                bool isEven = currentImageIndex % 2 == 0;
-
-                // Use the correct set of coordinates based on whether the page is even or odd
-                int x1 = isEven ? this.CropLeftEven : this.CropLeftOdd;
-                int y1 = isEven ? this.CropTopEven : this.CropTopOdd;
-                int x2 = x1 + this.CropWidth;  // Width remains common but could be changed if needed
-                int y2 = y1 + this.CropHeight; // Height remains common but could be changed if needed
-
-
-
-                int FullImage = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
-                int CropBoxImage = RavenImaging.ImgDuplicate(FullImage); 
-
-                RavenImaging.ImgCropBorder(CropBoxImage, x1, y1, x2, y2);
-
-                int FullJPG = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].JPG, 0);
-                int CropBoxJPG = RavenImaging.ImgDuplicate(FullJPG);
-                
-                RavenImaging.ImgCropBorder(CropBoxJPG, x1, y1, x2, y2);
-
-
-                int lb = RavenImaging.ImgFindBlackBorderLeft(CropBoxImage, 97.0, 1);
-                int rb = RavenImaging.ImgFindBlackBorderRight(CropBoxImage, 97.0, 1);
-                int tb = RavenImaging.ImgFindBlackBorderTop(CropBoxImage, 97.0, 1);
-                int bb = RavenImaging.ImgFindBlackBorderBottom(CropBoxImage, 97.0, 1);
-
-                int lbj = RavenImaging.ImgFindBlackBorderLeft(CropBoxJPG, 79.0, 1);
-                int rbj = RavenImaging.ImgFindBlackBorderRight(CropBoxJPG, 79.0, 1);
-                int tbj = RavenImaging.ImgFindBlackBorderTop(CropBoxJPG, 79.0, 1);
-                int bbj = RavenImaging.ImgFindBlackBorderBottom(CropBoxJPG, 79.0, 1);
-
-
-                // Set the crop position based on the current selection and whether the page is even or odd
-                // Loop thru until we find a right border
-                int seekval = rb;
-                
-
-                int maxtries = 30;
-                double brightness = 99.0;
-                int holes = 1; 
-
-                while (maxtries > 0)
-                {
-                    maxtries = maxtries - 1;
-                    
-                    holes = holes + 1;
-                    brightness = brightness - 1.0;
-
-                    seekval = RavenImaging.ImgFindBlackBorderRight(CropBoxJPG, brightness, holes);
-                    if (seekval != this.CropWidth)
-                    {
-                        MessageBox.Show(seekval.ToString()); 
-                    }
-                }
-
-
-
-                if (rb > 0)
-                {
-                    int rb_full = rb + x1;
-                    x1 = rb_full - this.CropWidth;
-
-                    if (isEven)
-                    {
-                        this.CropLeftEven = rb_full - this.CropWidth;                       
-                    }
-                    else
-                    {
-                        this.CropLeftOdd = rb_full - this.CropWidth; 
-                    }
-                SetCropbox(false, true); // Here, 'true' typically forces the crop box to update and activate
-                }
-
-            }
-        }
-        */
 
         private void RunPowerShellScript(string scriptFile)
         {
@@ -2193,11 +1897,6 @@ namespace RAVEN
             
         }
 
-        private void singleZoom()
-        {
-            // Eventually want a shortcut key with a 3X zoom to make line removal faster. Should zoom in if zoomed out / zoom out if zoomed in
-            // keyPicture2.ZoomImage(4096); 
-        }
 
         // This built to handle saving images from recog 
         // Verify write from recog (know that we've written)
@@ -2276,13 +1975,6 @@ namespace RAVEN
 
 
 
-        private void FieldSettingsSetFocus(Keys keyPressed)
-        {
-            if (keyPressed == Keys.A)
-            {
-                thresholdSettingsForm.SetFieldFocus(thresholdSettingsForm.currentlyFocusedControl);
-            }
-        }
 
         private void ToggleJPG()
         {
@@ -2308,64 +2000,6 @@ namespace RAVEN
             activecropbox = false;
         }
 		
-		// These are unused (verify) - but will be eventually so we can deskew JPG and keep JPG/TIF consistant
-        public void deskewrecog(string tifimage)
-        {
-            // Start the stopwatch to measure execution time
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            string jpgimage = tifimage.Replace(".tif", ".jpg"); 
-
-            string tempjpg = @"C:\temp\deskewrecogtest.jpg";
-            string temptif = @"C:\temp\deskewrecogtest.tif";
-
-            System.IO.File.Delete(temptif);
-
-            System.IO.File.Delete(tempjpg);
-
-
-            // CreateCheckpoint(tifimage);
-
-
-            // 31 ms for this function 
-            int _tifHandle = RavenImaging.ImgOpen(tifimage, 0);
-            int _jpgHandle = RavenImaging.ImgOpen(tifimage.Replace(".tif", ".jpg"), 0);
-
-                    
-            double skewangle = RavenImaging.ImgDeskew(_tifHandle, 5, 0.1, 1, 0, 0);
-
-
-            // ImgCorrectSkew & ImgCorrectSkew1 do not work
-
-            // ImgCorrectSkew(intImageHandle, floatAngle, IntColor, boolIntepolation, boolReSize)
-            // Put deskew code from imagemagic below here
-
-
-            // RavenImaging.ImgSaveAsTif(_tifHandle, temptif, 5, 0);
-            //  RavenImaging.ImgSaveAsJpg(_jpgHandle, tempjpg, 80); 
-            RavenImaging.ImgDelete(_tifHandle);
-            RavenImaging.ImgDelete(_jpgHandle);
-
-            /*
-            RotateWithSameCanvasSize(tifimage, skewangle, temptif);
-            RotateWithSameCanvasSize(jpgimage, skewangle, tempjpg);
-            */
-
-            RotateWithSameCanvasSize(tifimage, skewangle, temptif);
-            RotateWithSameCanvasSize(jpgimage, skewangle, tempjpg);
-
-            // Stop the stopwatch
-            stopwatch.Stop();
-
-            // Get the elapsed time as a TimeSpan
-            TimeSpan ts = stopwatch.Elapsed;
-
-            // Format and display the elapsed time
-            MessageBox.Show($"Whole deskewrecog function execution time: {ts.TotalMilliseconds} ms");
-
-
-        }
 
 
 
@@ -2422,49 +2056,6 @@ namespace RAVEN
 
 
 
-        public void SlowRotateWithSameCanvasSize(string imagePath, double angle, string outputPath)
-        {
-            // Start the stopwatch to measure execution time
-            Stopwatch stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            using (MagickImage image = new MagickImage(imagePath))
-            {
-                // Store original dimensions
-                uint width = image.Width;
-                uint height = image.Height;
-
-                // Set background color
-                image.BackgroundColor = MagickColors.White;
-
-                // Disable anti-aliasing
-                image.FilterType = FilterType.Point;
-
-                // Rotate the image (negative angle to deskew)
-                image.Rotate(-angle);
-
-                // Calculate coordinates to crop the image back to original size
-                uint x = (image.Width - width) / 2;
-                uint y = (image.Height - height) / 2;
-
-                // Crop to original size
-                image.Crop(new MagickGeometry((int)x, (int)y, width, height));
-
-                image.ResetPage(); // Reset virtual canvas
-
-                // Save the deskewed image
-                image.Write(outputPath);
-            }
-
-            // Stop the stopwatch
-            stopwatch.Stop();
-
-            // Get the elapsed time as a TimeSpan
-            TimeSpan ts = stopwatch.Elapsed;
-
-            // Format and display the elapsed time
-            MessageBox.Show($"Partial deskewrecog function execution time: {ts.TotalMilliseconds} ms");
-        }
 
 
 
@@ -2564,8 +2155,8 @@ namespace RAVEN
             int TifHandle = RavenImaging.ImgOpen(ImagePairs[currentImageIndex].TIF, 0);
 
             int jpgWidth = RavenImaging.ImgGetWidth(ImageHandle);
-            int jpgHeight = RavenImaging.ImgGetHeight(TifHandle);
-            int tifWidth = RavenImaging.ImgGetWidth(ImageHandle);
+            int jpgHeight = RavenImaging.ImgGetHeight(ImageHandle);
+            int tifWidth = RavenImaging.ImgGetWidth(TifHandle);
             int tifHeight = RavenImaging.ImgGetHeight(TifHandle);
 
             if (jpgWidth != tifWidth || jpgHeight != tifHeight)
@@ -2588,23 +2179,22 @@ namespace RAVEN
             // ImgAutoThreshold(_CurrentImage, 1);
             RavenImaging.ImgAutoThreshold(CopyOfImage, 1);
             // 
-            int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-            int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-            int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-            int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
+            // Round A: single LockBits+Copy for all 4 border calls (vs 4 separate copies)
+            var aRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                new[] { (0, 90.0, 1), (2, 90.0, 1), (1, 90.0, 1), (3, 90.0, 1) });
+            int aLeft = aRes[0]; int aTop = aRes[1]; int aRight = aRes[2]; int aBottom = aRes[3];
 
             if ((aLeft <= aRight) && (aTop <= aBottom))
             {
                 RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
 
-                //Copy of image has black interior photostat bitonal - we will invert this. 
+                //Copy of image has black interior photostat bitonal - we will invert this.
                 RavenImaging.ImgInvert(CopyOfImage);
 
-                //Now we'll find the black border which is the scan border, we'll crop it off (I think this is not right desc - but function works)
-                int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-                int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-                int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-                int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
+                // Round B: single LockBits+Copy for all 4 border calls
+                var bRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                    new[] { (0, 99.0, 1), (2, 99.0, 1), (1, 99.0, 1), (3, 99.0, 1) });
+                int bLeft = bRes[0]; int bTop = bRes[1]; int bRight = bRes[2]; int bBottom = bRes[3];
 
                 bLeft = bLeft + 20;
                 bRight = bRight - 20;
@@ -2613,10 +2203,10 @@ namespace RAVEN
                 {
                     RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
 
-                    int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-                    int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
-                    int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-                    int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
+                    // Round C: single LockBits+Copy for all 4 border calls
+                    var cRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                        new[] { (0, 80.0, 30), (2, 80.0, 100), (1, 80.0, 30), (3, 80.0, 100) });
+                    int cLeft = cRes[0]; int cTop = cRes[1]; int cRight = cRes[2]; int cBottom = cRes[3];
 
                     // don't understand the math here but think works
                     int left = aLeft + (bLeft + 20) + cLeft;
@@ -2630,19 +2220,28 @@ namespace RAVEN
                     // This is for setting new cropbox size
                     if (LocationOnly == false)
                     {
+                        this.CropHeight = bottom - top + 160;
+                        this.CropWidth = right - left + 160;
+
                         if (isEven)
                         {
                             this.CropLeftEven = left - 80;
                             this.CropTopEven = top - 80;
-                            this.CropHeight = bottom - top + 160;
-                            this.CropWidth = right - left + 160;
+                            xCropCordinatesEven.X1 = left - 80;
+                            xCropCordinatesEven.Y1 = top - 80;
+                            xCropCordinatesEven.X2 = right + 160;
+                            xCropCordinatesEven.Y2 = bottom + 160;
+                            SetCropbox(xCropCordinatesEven);
                         }
                         else
                         {
                             this.CropLeftOdd = left - 80;
                             this.CropTopOdd = top - 80;
-                            this.CropHeight = bottom - top + 160;
-                            this.CropWidth = right - left + 160;
+                            xCropCordinatesOdd.X1 = left - 80;
+                            xCropCordinatesOdd.Y1 = top - 80;
+                            xCropCordinatesOdd.X2 = right + 160;
+                            xCropCordinatesOdd.Y2 = bottom + 160;
+                            SetCropbox(xCropCordinatesOdd);
                         }
                     }
                     else
@@ -2700,88 +2299,6 @@ namespace RAVEN
         }
 
 
-        // Would need to re-add the recog library as a secondary because it corrupts things to have things on multi threads. Would kick off Autoset Cropbox against rest of book with second library
-        /*
-        private async void AutosetCropbox_Cache()
-        { 
-
-            if (F2Settings.NegativeImage != true) { return; } // Early return if isNegative is not true
-
-            await Task.Run(() =>
-            {
-                // Loop through all image pairs
-                for (int i = 0; i < ImagePairs.Count; i++)
-                {
-                    var imagePair = ImagePairs[i];
-
-                    int ImageHandle = RecoIP1.ImgOpen(imagePair.JPG, 0);
-                    int TifHandle = RecoIP1.ImgOpen(imagePair.TIF, 0);
-
-                    int jpgWidth = RecoIP1.ImgGetWidth(ImageHandle);
-                    int jpgHeight = RecoIP1.ImgGetHeight(TifHandle);
-                    int tifWidth = RecoIP1.ImgGetWidth(ImageHandle);
-                    int tifHeight = RecoIP1.ImgGetHeight(TifHandle);
-
-                    if (jpgWidth != tifWidth || jpgHeight != tifHeight)
-                    {
-                        // Ensure this method is thread-safe or call it in a thread-safe manner
-                        StatusUpdate("TIF & JPG Size Don't Match!");
-                        RecoIP1.ImgDelete(ImageHandle);
-                        RecoIP1.ImgDelete(TifHandle);
-                        return;
-                    }
-
-                    int CopyOfImage = RecoIP1.ImgDuplicate(ImageHandle);
-
-                    RecoIP1.ImgAutoThreshold(CopyOfImage, 1);
-
-                    int aLeft = RecoIP1.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-                    int aTop = RecoIP1.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-                    int aRight = RecoIP1.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-                    int aBottom = RecoIP1.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
-
-                    if ((aLeft <= aRight) && (aTop <= aBottom))
-                    {
-                        RecoIP1.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
-                        RecoIP1.ImgInvert(CopyOfImage);
-
-                        int bLeft = RecoIP1.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-                        int bTop = RecoIP1.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-                        int bRight = RecoIP1.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-                        int bBottom = RecoIP1.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
-
-                        bLeft += 20;
-                        bRight -= 20;
-
-                        if (bLeft <= bRight && bTop <= bBottom)
-                        {
-                            RecoIP1.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
-
-                            int cLeft = RecoIP1.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-                            int cTop = RecoIP1.ImgFindBlackBorderTop(CopyOfImage, 80.0, 100);
-                            int cRight = RecoIP1.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-                            int cBottom = RecoIP1.ImgFindBlackBorderBottom(CopyOfImage, 80.0, 100);
-
-                            int left = aLeft + (bLeft + 20) + cLeft;
-                            int top = aTop + bTop + cTop;
-                            int bottom = cBottom + aTop + bTop;
-                            int right = cRight + aLeft + bLeft;
-
-                            ImagePairs[i] = (imagePair.JPG, imagePair.TIF, left, top, right, bottom);
-
-                            // Ensure this method updates UI in a thread-safe manner
-
-                            RecoIP1.ImgDelete(ImageHandle);
-                            RecoIP1.ImgDelete(TifHandle);
-                            RecoIP1.ImgDelete(CopyOfImage);
-
-                        }
-                    }
-                }
-            });
-        }
-
-        */ 
 
         // Build Crop
         // Input Tif -> Saves to original image. Calling function saves / overwrites it. 
@@ -3203,20 +2720,6 @@ namespace RAVEN
 
 
 
-                        
-                        
-                        // Very dirty way to fix this bug just for now - I think the zooms are getting set incorrectly. 
-                        /*
-                        if (_QuickZoom.QZoomedIn)
-                        {
-                            __QuickZoom(_QuickZoom.X, _QuickZoom.Y, 750);
-                        }
-                        else
-                        if (leftZoom > 0 && topZoom > 0 && rightZoom > 0 && bottomZoom > 0)
-                        {
-                            keyPicture2.ZoomPanImage1(leftZoom, topZoom, rightZoom, bottomZoom);
-                        }
-                        */ 
                     }
                     else
                     {
@@ -3566,8 +3069,6 @@ namespace RAVEN
             // Corrected call with width and height
             // USVWin.EraseIn(tifimage, tifimage + ".tif", ((short)X1), ((short)Y1), ((short)width), ((short)height));
             
-            int a = 1;
-
             // May need to do a dedicated filereplace
 
             string TempFile = SaveTemp(tifimage);
@@ -3754,6 +3255,38 @@ namespace RAVEN
             string TempPartialTifFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thresholded_Partial.tif");
 
 
+            // Fast path: full non-negative conversion for RDynamic/Dynamic/Refine
+            // Skips ImgOpen/ImgDuplicate — the byte-array pipeline doesn't need GDI+ handles
+            if (X1 <= 0 && Y1 <= 0 && X2 <= 0 && Y2 <= 0
+                && !NegativeImage && !SBB
+                && (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine"))
+            {
+                CreateCheckpoint(outputTIF);
+                int dynDespeckle = despeckle;
+                OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness,
+                    RefineThreshold, refinetolerance, dynDespeckle);
+                OpenThresholdBridge.WaitForPendingSave();
+                long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
+                string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
+                return;
+            }
+
+            // Fast path: full photostat (negative) conversion for RDynamic/Dynamic
+            // Byte-array pipeline with parallel AT — no GDI+ handles
+            if (X1 <= 0 && Y1 <= 0 && X2 <= 0 && Y2 <= 0
+                && NegativeImage && !SBB
+                && (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic"))
+            {
+                CreateCheckpoint(outputTIF);
+                OpenThresholdBridge.ApplyThresholdToFilePhotostat(inputJPG, outputTIF, 7, 7, contrast, brightness, despeckle);
+                OpenThresholdBridge.WaitForPendingSave();
+                long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
+                string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
+                _lastThresholdDetail = $"{total}ms {bits} (photostat decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
+                return;
+            }
+
             int ImageHandle = 0;
 
             if (!SBB)
@@ -3762,7 +3295,7 @@ namespace RAVEN
                 if (CachedJPG == 0 || ForceClearCache == true)
                 {
                     ImageHandle = RavenImaging.ImgOpen(inputJPG, 0); // Open original image
-                    CachedJPG = ImageHandle; // Save the handle for later. 
+                    CachedJPG = ImageHandle; // Save the handle for later.
                 }
                 else
                 {
@@ -3772,40 +3305,33 @@ namespace RAVEN
             else
             {
                 ImageHandle = RavenImaging.ImgOpen(inputJPG, 0); // Open original image
-                CachedJPG = ImageHandle; // Save the handle for later. 
+                CachedJPG = ImageHandle; // Save the handle for later.
 
             }
 
-            // Think I can get rid of this in some cases (full conversion) since I do my width / height w phreview 
+            // Think I can get rid of this in some cases (full conversion) since I do my width / height w phreview
             int TifHandle = File.Exists(outputTIF) ? RavenImaging.ImgOpen(outputTIF, 0) : 0; // Open TIF if exists (copies area into the TIF if area)
-            int tImageHandle = 0; 
-
-            int GreyscaleForRefine = 0;
+            int tImageHandle = 0;
 
             // Full conversion
             if (X1 <= 0 && Y1 <= 0 && X2 <= 0 && Y2 <= 0)
             {
                 CreateCheckpoint(outputTIF);
 
-                // If isNegative set (Photostat) & full conversion run this script to deal with borders. 
+                // If isNegative set (Photostat) & full conversion run this script to deal with borders.
 
                 // Using tImageHandle to save original to keep
                 tImageHandle = RavenImaging.ImgDuplicate(ImageHandle);
-                
+
                 // Full + Photostat + Non SBB Thresholding
                 if (NegativeImage == true && SBB == false)
                 {
                     StatusUpdate("Photostat Threshold - please wait ... ");
 
-                    // Pure C# path for Refine only — photostat RDynamic uses border pipeline below
+                    // Refine threshold not supported for full photostat conversions (same as IET)
                     if (conversionSettings?.Type == "Refine")
                     {
-                        OpenThresholdBridge.ApplyThresholdToFileNegative(inputJPG, outputTIF, 7, 7, contrast, brightness,
-                            RefineThreshold, refinetolerance);
-                        OpenThresholdBridge.WaitForPendingSave();
-                        long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
-                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
+                        MessageBox.Show("Refine Threshold is not supported for full photostat conversions.");
                         if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
                         if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
                         return;
@@ -3815,23 +3341,22 @@ namespace RAVEN
                     
                     RavenImaging.ImgAutoThreshold(CopyOfImage, 2);
 
-                    int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-                    int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-                    int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-                    int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
+                    // Round A: single LockBits+Copy for all 4 border calls
+                    var aRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                        new[] { (0, 90.0, 1), (2, 90.0, 1), (1, 90.0, 1), (3, 90.0, 1) });
+                    int aLeft = aRes[0]; int aTop = aRes[1]; int aRight = aRes[2]; int aBottom = aRes[3];
 
                     if ((aLeft <= aRight) && (aTop <= aBottom))
                     {
                         RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
 
-                        //Copy of image has black interior photostat bitonal - we will invert this. 
+                        //Copy of image has black interior photostat bitonal - we will invert this.
                         RavenImaging.ImgInvert(CopyOfImage);
 
-                        //Now we'll find the black border which is the scan border, we'll crop it off (I think this is not right desc - but function works)
-                        int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-                        int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-                        int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-                        int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
+                        // Round B: single LockBits+Copy for all 4 border calls
+                        var bRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                            new[] { (0, 99.0, 1), (2, 99.0, 1), (1, 99.0, 1), (3, 99.0, 1) });
+                        int bLeft = bRes[0]; int bTop = bRes[1]; int bRight = bRes[2]; int bBottom = bRes[3];
 
                         bLeft = bLeft + 20;
                         bRight = bRight - 20;
@@ -3840,10 +3365,10 @@ namespace RAVEN
                         {
                             RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
 
-                            int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-                            int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80, 100);
-                            int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-                            int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80, 100);
+                            // Round C: single LockBits+Copy for all 4 border calls
+                            var cRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
+                                new[] { (0, 80.0, 30), (2, 80.0, 100), (1, 80.0, 30), (3, 80.0, 100) });
+                            int cLeft = cRes[0]; int cTop = cRes[1]; int cRight = cRes[2]; int cBottom = cRes[3];
 
                             RavenImaging.ImgDelete(CopyOfImage);
 
@@ -3918,73 +3443,7 @@ namespace RAVEN
                     }
                 }
 
-                // Full + Non photostat + non SBB  thresholding 
-                else if (NegativeImage == false && SBB == false)
-                {
-                    // Is ImageHandle before this point greyscale?
-                    // Refine threshold is set - we need to copy / then convert / preserve the greyscale for the filter.
-                    if (RefineThreshold == true)
-                    {                      
-                        GreyscaleForRefine = RavenImaging.ImgCopy(ImageHandle, 0, 0, 0, 0);
-
-                        // Convert to greyscale if color
-                        if (RavenImaging.ImgGetBitsPixel(GreyscaleForRefine) == 24)
-                        {
-                            RavenImaging.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
-                        }
-
-                    }
-               
-                    if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
-                    {
-                        // Pure C# path — threshold + save, then display
-                        OpenThresholdBridge.ApplyThresholdToFile(inputJPG, outputTIF, 7, 7, contrast, brightness,
-                            RefineThreshold, refinetolerance);
-                        OpenThresholdBridge.WaitForPendingSave();
-                        long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
-                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        _lastThresholdDetail = $"{total}ms {bits} (decode:{OpenThresholdBridge.LastDecodeMs} thresh:{OpenThresholdBridge.LastThresholdMs} save:{OpenThresholdBridge.LastWriteMs})";
-
-                        // Release the handles we opened before this block
-                        if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
-                        if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
-                        return;
-                    }
-
-                    {
-                        var swThresh = System.Diagnostics.Stopwatch.StartNew();
-                        RavenImaging.ImgDynamicThresholdAverage(tImageHandle, 7, 7, contrast, brightness);
-                        swThresh.Stop();
-                        long dynThreshMs = swThresh.ElapsedMilliseconds;
-
-                        long dynRefineMs = 0;
-                        if (RefineThreshold == true)
-                        {
-                            var swRefine = System.Diagnostics.Stopwatch.StartNew();
-                            RavenImaging.ImgRefineThreshold(tImageHandle, GreyscaleForRefine, this.F2Settings.Tolerance);
-                            swRefine.Stop();
-                            dynRefineMs = swRefine.ElapsedMilliseconds;
-                            RavenImaging.ImgDelete(GreyscaleForRefine);
-                        }
-
-                        long dynDespeckleMs = 0;
-                        if (despeckle > 0 && despeckle < 10)
-                        {
-                            var swDesp = System.Diagnostics.Stopwatch.StartNew();
-                            RavenImaging.ImgDespeckle(tImageHandle, despeckle, despeckle);
-                            swDesp.Stop();
-                            dynDespeckleMs = swDesp.ElapsedMilliseconds;
-                        }
-
-                        string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                        string detail = $"thresh:{dynThreshMs}";
-                        if (dynRefineMs > 0) detail += $" refine:{dynRefineMs}";
-                        if (dynDespeckleMs > 0) detail += $" despeckle:{dynDespeckleMs}";
-                        _lastThresholdDetail = $"{dynThreshMs + dynRefineMs + dynDespeckleMs}ms {bits} ({detail})";
-                    }
-
-                }
-                // Set Tif handle which will get saved as the thresholded image handle. 
+                // Set Tif handle which will get saved as the thresholded image handle.
 
                 // If no SBB - we set tImageHandle to our thresholded full image
                 if (SBB == false) { TifHandle = RavenImaging.ImgCopy(tImageHandle, 0, 0, 0, 0); }
@@ -4029,17 +3488,17 @@ namespace RAVEN
                 // Create Checkpoin
                 CreateCheckpoint(outputTIF);
 
-                // Pure C# partial path — read JPG, crop, threshold, write TIF directly (RDynamic + Refine)
-                if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Refine")
+                // Pure C# partial path — read JPG, crop, threshold, write TIF directly (RDynamic + Dynamic + Refine)
+                if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine")
                 {
                     if (NegativeImage)
                         OpenThresholdBridge.ApplyThresholdToFilePartialNegative(inputJPG, outputTIF,
                             X1, Y1, X2, Y2, 7, 7, contrast, brightness,
-                            RefineThreshold, refinetolerance);
+                            RefineThreshold, refinetolerance, despeckle);
                     else
                         OpenThresholdBridge.ApplyThresholdToFilePartial(inputJPG, outputTIF,
                             X1, Y1, X2, Y2, 7, 7, contrast, brightness,
-                            RefineThreshold, refinetolerance);
+                            RefineThreshold, refinetolerance, despeckle);
                     OpenThresholdBridge.WaitForPendingSave();
                     {
                         long total = OpenThresholdBridge.LastDecodeMs + OpenThresholdBridge.LastThresholdMs + Math.Max(0, OpenThresholdBridge.LastWriteMs);
@@ -4052,98 +3511,6 @@ namespace RAVEN
                     return;
                 }
 
-                // Non-RDynamic partial: existing RavenImaging handle pipeline
-                int ImageHandlePartial = 0;
-
-                var currentPartialDims = (X1, Y1, X2, Y2);
-
-                //CachedJPG == 0 || ForceClearCache == true
-
-                if (CachedPartialImageHandle != 0 && this.CachedPartialImageDimensions == currentPartialDims && ForceClearCache == false)
-                {
-                    ImageHandlePartial = CachedPartialImageHandle;
-                }
-                else
-                {
-                    if (CachedPartialImageHandle != 0)
-                    {
-                        RavenImaging.ImgDelete(CachedPartialImageHandle);
-                        CachedPartialImageHandle = 0;
-                    }
-
-                    ImageHandlePartial = RavenImaging.ImgCopy(ImageHandle, X1, Y1, X2, Y2);
-                    CachedPartialImageHandle = ImageHandlePartial;
-                    CachedPartialImageDimensions = currentPartialDims;
-
-
-                    // If isNegative set - then invert the area
-                    if (NegativeImage == true)
-                    {
-                        RavenImaging.ImgInvert(ImageHandlePartial);
-                    }
-                }
-
-                // If it's color we'll convert to greyscale
-
-                // Refine threshold is set - we need to copy / then convert / preserve the greyscale for the filter.
-                if (RefineThreshold == true)
-                {
-                    GreyscaleForRefine = RavenImaging.ImgDuplicate(ImageHandlePartial);
-
-                    int nBits = RavenImaging.ImgGetBitsPixel(GreyscaleForRefine);
-                    // If color image, convert to greyscale. 24 = color, 8 = greyscale.
-                    if (nBits == 24)
-                    {
-                        RavenImaging.ImgConvertToGrayScale(GreyscaleForRefine, 0, true, true, true);
-                    }
-                }
-
-                // Caching the JPG we loaded so we copy this since it gets thresholded. Only if not SBB (no thresholding in SBB)
-                int ImageHandleThrowAway = 0;
-
-                ImageHandleThrowAway = RavenImaging.ImgDuplicate(ImageHandlePartial);
-                {
-                    var swThresh = System.Diagnostics.Stopwatch.StartNew();
-                    RavenImaging.ImgDynamicThresholdAverage(ImageHandleThrowAway, 7, 7, contrast, brightness);
-                    swThresh.Stop();
-                    long dynThreshMs = swThresh.ElapsedMilliseconds;
-
-                    long dynRefineMs = 0;
-                    // Refine threshold cont
-                    if (RefineThreshold == true)
-                    {
-                        // 10 seems to be the sweet spot for not losing data and pulling stuff out. It will be noisy but can be combined with a Despekle to get good results.
-                        var swRefine = System.Diagnostics.Stopwatch.StartNew();
-                        RavenImaging.ImgRefineThreshold(ImageHandleThrowAway, GreyscaleForRefine, refinetolerance);
-                        swRefine.Stop();
-                        dynRefineMs = swRefine.ElapsedMilliseconds;
-                        RavenImaging.ImgDelete(GreyscaleForRefine);
-                    }
-
-                    long dynDespeckleMs = 0;
-                    // If despeckle is set - do that
-                    if (despeckle > 0)
-                    {
-                        var swDesp = System.Diagnostics.Stopwatch.StartNew();
-                        RavenImaging.ImgDespeckle(ImageHandleThrowAway, despeckle, despeckle);
-                        swDesp.Stop();
-                        dynDespeckleMs = swDesp.ElapsedMilliseconds;
-                    }
-
-                    string bits = Environment.Is64BitProcess ? "64-bit" : "32-bit";
-                    string detail = $"thresh:{dynThreshMs}";
-                    if (dynRefineMs > 0) detail += $" refine:{dynRefineMs}";
-                    if (dynDespeckleMs > 0) detail += $" despeckle:{dynDespeckleMs}";
-                    _lastThresholdDetail = $"{dynThreshMs + dynRefineMs + dynDespeckleMs}ms {bits} ({detail})";
-                }
-
-                // RavenImaging.ImgSaveAsTif(ImageHandleThrowAway, TempPartialTifFile, 0, 0);
-                RavenImaging.ImgAddCopy(TifHandle, ImageHandleThrowAway, X1, Y1);
-
-                // This is now cached and should be cleaned up from other places.
-                // RavenImaging.ImgDelete(ImageHandlePartial); // Clean up partial image handle right after its use
-
-                RavenImaging.ImgDelete(ImageHandleThrowAway);
             }
 
             // Note: Removed JPG cropping during threshold operation
@@ -4649,33 +4016,16 @@ namespace RAVEN
             }
         }
 
-        private void panel1_Paint(object sender, PaintEventArgs e)
-        {
-        }
 
-        private void keyPicture1_Paint(object sender, PaintEventArgs e)
-        {
-        }
 
         private void TestMe_Click(object sender, EventArgs e)
         {
             KeyboardShortcutHelp();
         }
 
-        private void textBox1_TextChanged(object sender, EventArgs e)
-        {
-        }
-
-        private void button1_Click(object sender, EventArgs e)
-        {
-            MessageBox.Show("ZoomIn");
-        }
 
 
-        private void button2_Click(object sender, EventArgs e)
-        {
-            // AutosetCropbox_Cache();
-        }
+
 
         private void LoadINISettings()
         {

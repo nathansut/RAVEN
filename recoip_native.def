@@ -8,3 +8,4 @@ EXPORTS
     AdaptiveThresholdDiag = AdaptiveThresholdDiag@44
     DynamicThresholdDiag = DynamicThresholdDiag@28
     AdaptiveThresholdTest = AdaptiveThresholdTest@36
+    FindBlackBorderBatch

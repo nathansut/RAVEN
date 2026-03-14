@@ -144,7 +144,7 @@
             textBoxF2Contrast.Name = "textBoxF2Contrast";
             textBoxF2Contrast.Size = new System.Drawing.Size(68, 23);
             textBoxF2Contrast.TabIndex = 1;
-            textBoxF2Contrast.TextChanged += textBoxAreaConvContrast_TextChanged;
+            textBoxF2Contrast.TextChanged += OnSettingChanged;
             // 
             // label2
             // 
@@ -163,7 +163,7 @@
             textBoxF2Brightness.Name = "textBoxF2Brightness";
             textBoxF2Brightness.Size = new System.Drawing.Size(68, 23);
             textBoxF2Brightness.TabIndex = 3;
-            textBoxF2Brightness.TextChanged += textBoxAreaConvBrightness_TextChanged;
+            textBoxF2Brightness.TextChanged += OnSettingChanged;
             // 
             // F2Negative
             // 
@@ -176,7 +176,7 @@
             F2Negative.TabStop = false;
             F2Negative.Text = "Negative";
             F2Negative.UseVisualStyleBackColor = true;
-            F2Negative.CheckedChanged += Negative_CheckedChanged;
+            F2Negative.CheckedChanged += OnNegativeChanged;
             // 
             // buConvertBook
             // 
@@ -217,8 +217,7 @@
             AreaConvThresholdGroupbox.TabIndex = 32;
             AreaConvThresholdGroupbox.TabStop = false;
             AreaConvThresholdGroupbox.Text = "F2";
-            AreaConvThresholdGroupbox.Enter += AreaConvThresholdGroupbox_Enter;
-            // 
+                        // 
             // F2ActiveType
             // 
             F2ActiveType.FormattingEnabled = true;
@@ -228,7 +227,7 @@
             F2ActiveType.Name = "F2ActiveType";
             F2ActiveType.Size = new System.Drawing.Size(265, 23);
             F2ActiveType.TabIndex = 42;
-            F2ActiveType.SelectedIndexChanged += F2ActiveType_SelectedIndexChanged;
+            F2ActiveType.SelectedIndexChanged += OnSettingChanged;
             // 
             // AreaConvDyncamicLabel
             // 
@@ -257,7 +256,7 @@
             textBoxF2ToleranceFilter.Name = "textBoxF2ToleranceFilter";
             textBoxF2ToleranceFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF2ToleranceFilter.TabIndex = 8;
-            textBoxF2ToleranceFilter.TextChanged += textBoxAreaConvToleranceFilter_TextChanged;
+            textBoxF2ToleranceFilter.TextChanged += OnSettingChanged;
             // 
             // AreaConvRefineLabel
             // 
@@ -286,7 +285,7 @@
             textBoxF2FilterThresholdStepup.Name = "textBoxF2FilterThresholdStepup";
             textBoxF2FilterThresholdStepup.Size = new System.Drawing.Size(68, 23);
             textBoxF2FilterThresholdStepup.TabIndex = 6;
-            textBoxF2FilterThresholdStepup.TextChanged += textBoxAreaConvFilterThresholdStepup_TextChanged;
+            textBoxF2FilterThresholdStepup.TextChanged += OnSettingChanged;
             // 
             // textBoxF2DespeckleFilter
             // 
@@ -295,7 +294,7 @@
             textBoxF2DespeckleFilter.Name = "textBoxF2DespeckleFilter";
             textBoxF2DespeckleFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF2DespeckleFilter.TabIndex = 7;
-            textBoxF2DespeckleFilter.TextChanged += textBoxAreaConvDespeckleFilter_TextChanged;
+            textBoxF2DespeckleFilter.TextChanged += OnSettingChanged;
             // 
             // label4
             // 
@@ -306,8 +305,7 @@
             label4.Size = new System.Drawing.Size(92, 15);
             label4.TabIndex = 34;
             label4.Text = "Contrast Stepup";
-            label4.Click += label4_Click;
-            // 
+                        // 
             // label3
             // 
             label3.AutoSize = true;
@@ -325,7 +323,7 @@
             textBoxF2Despeckle.Name = "textBoxF2Despeckle";
             textBoxF2Despeckle.Size = new System.Drawing.Size(33, 23);
             textBoxF2Despeckle.TabIndex = 2;
-            textBoxF2Despeckle.TextChanged += Despeckle_TextChanged;
+            textBoxF2Despeckle.TextChanged += OnSettingChanged;
             // 
             // AppOptionsGroupbox
             // 
@@ -388,7 +386,7 @@
             F3ActiveType.Name = "F3ActiveType";
             F3ActiveType.Size = new System.Drawing.Size(265, 23);
             F3ActiveType.TabIndex = 42;
-            F3ActiveType.SelectedIndexChanged += F3ActiveType_SelectedIndexChanged;
+            F3ActiveType.SelectedIndexChanged += OnSettingChanged;
             // 
             // F3DyncamicLabel
             // 
@@ -417,7 +415,7 @@
             textBoxF3ToleranceFilter.Name = "textBoxF3ToleranceFilter";
             textBoxF3ToleranceFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF3ToleranceFilter.TabIndex = 16;
-            textBoxF3ToleranceFilter.TextChanged += textBoxF3ToleranceFilter_TextChanged;
+            textBoxF3ToleranceFilter.TextChanged += OnSettingChanged;
             // 
             // F3RefineLabel
             // 
@@ -446,7 +444,7 @@
             textBoxF3FilterThresholdStepup.Name = "textBoxF3FilterThresholdStepup";
             textBoxF3FilterThresholdStepup.Size = new System.Drawing.Size(68, 23);
             textBoxF3FilterThresholdStepup.TabIndex = 14;
-            textBoxF3FilterThresholdStepup.TextChanged += textBoxF3FilterThresholdStepup_TextChanged;
+            textBoxF3FilterThresholdStepup.TextChanged += OnSettingChanged;
             // 
             // textBoxF3DespeckleFilter
             // 
@@ -455,7 +453,7 @@
             textBoxF3DespeckleFilter.Name = "textBoxF3DespeckleFilter";
             textBoxF3DespeckleFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF3DespeckleFilter.TabIndex = 15;
-            textBoxF3DespeckleFilter.TextChanged += textBoxF3DespeckleFilter_TextChanged;
+            textBoxF3DespeckleFilter.TextChanged += OnSettingChanged;
             // 
             // label11
             // 
@@ -484,7 +482,7 @@
             textBoxF3Despeckle.Name = "textBoxF3Despeckle";
             textBoxF3Despeckle.Size = new System.Drawing.Size(33, 23);
             textBoxF3Despeckle.TabIndex = 11;
-            textBoxF3Despeckle.TextChanged += textBoxF3Despeckle_TextChanged;
+            textBoxF3Despeckle.TextChanged += OnSettingChanged;
             // 
             // label13
             // 
@@ -503,7 +501,7 @@
             textBoxF3Brightness.Name = "textBoxF3Brightness";
             textBoxF3Brightness.Size = new System.Drawing.Size(68, 23);
             textBoxF3Brightness.TabIndex = 12;
-            textBoxF3Brightness.TextChanged += textBoxF3Brightness_TextChanged;
+            textBoxF3Brightness.TextChanged += OnSettingChanged;
             // 
             // F3Negative
             // 
@@ -516,7 +514,7 @@
             F3Negative.TabStop = false;
             F3Negative.Text = "Negative";
             F3Negative.UseVisualStyleBackColor = true;
-            F3Negative.CheckedChanged += F3Negative_CheckedChanged;
+            F3Negative.CheckedChanged += OnNegativeChanged;
             // 
             // label14
             // 
@@ -535,7 +533,7 @@
             textBoxF3Contrast.Name = "textBoxF3Contrast";
             textBoxF3Contrast.Size = new System.Drawing.Size(68, 23);
             textBoxF3Contrast.TabIndex = 10;
-            textBoxF3Contrast.TextChanged += textBoxF3Contrast_TextChanged;
+            textBoxF3Contrast.TextChanged += OnSettingChanged;
             // 
             // F4ThresholdSettings
             // 
@@ -573,7 +571,7 @@
             F4ActiveType.Name = "F4ActiveType";
             F4ActiveType.Size = new System.Drawing.Size(265, 23);
             F4ActiveType.TabIndex = 41;
-            F4ActiveType.SelectedIndexChanged += F4ActiveType_SelectedIndexChanged;
+            F4ActiveType.SelectedIndexChanged += OnSettingChanged;
             // 
             // F4DyncamicLabel
             // 
@@ -602,7 +600,7 @@
             textBoxF4ToleranceFilter.Name = "textBoxF4ToleranceFilter";
             textBoxF4ToleranceFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF4ToleranceFilter.TabIndex = 24;
-            textBoxF4ToleranceFilter.TextChanged += textBoxF4ToleranceFilter_TextChanged;
+            textBoxF4ToleranceFilter.TextChanged += OnSettingChanged;
             // 
             // F4RefineLabel
             // 
@@ -631,7 +629,7 @@
             textBoxF4FilterThresholdStepup.Name = "textBoxF4FilterThresholdStepup";
             textBoxF4FilterThresholdStepup.Size = new System.Drawing.Size(68, 23);
             textBoxF4FilterThresholdStepup.TabIndex = 22;
-            textBoxF4FilterThresholdStepup.TextChanged += textBoxF4FilterThresholdStepup_TextChanged;
+            textBoxF4FilterThresholdStepup.TextChanged += OnSettingChanged;
             // 
             // textBoxF4DespeckleFilter
             // 
@@ -640,7 +638,7 @@
             textBoxF4DespeckleFilter.Name = "textBoxF4DespeckleFilter";
             textBoxF4DespeckleFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF4DespeckleFilter.TabIndex = 23;
-            textBoxF4DespeckleFilter.TextChanged += textBoxF4DespeckleFilter_TextChanged;
+            textBoxF4DespeckleFilter.TextChanged += OnSettingChanged;
             // 
             // label19
             // 
@@ -669,7 +667,7 @@
             textBoxF4Despeckle.Name = "textBoxF4Despeckle";
             textBoxF4Despeckle.Size = new System.Drawing.Size(33, 23);
             textBoxF4Despeckle.TabIndex = 19;
-            textBoxF4Despeckle.TextChanged += textBoxF4Despeckle_TextChanged;
+            textBoxF4Despeckle.TextChanged += OnSettingChanged;
             // 
             // label21
             // 
@@ -688,7 +686,7 @@
             textBoxF4Brightness.Name = "textBoxF4Brightness";
             textBoxF4Brightness.Size = new System.Drawing.Size(68, 23);
             textBoxF4Brightness.TabIndex = 20;
-            textBoxF4Brightness.TextChanged += textBoxF4Brightness_TextChanged;
+            textBoxF4Brightness.TextChanged += OnSettingChanged;
             // 
             // F4Negative
             // 
@@ -701,7 +699,7 @@
             F4Negative.TabStop = false;
             F4Negative.Text = "Negative";
             F4Negative.UseVisualStyleBackColor = true;
-            F4Negative.CheckedChanged += F4Negative_CheckedChanged;
+            F4Negative.CheckedChanged += OnNegativeChanged;
             // 
             // label22
             // 
@@ -720,7 +718,7 @@
             textBoxF4Contrast.Name = "textBoxF4Contrast";
             textBoxF4Contrast.Size = new System.Drawing.Size(68, 23);
             textBoxF4Contrast.TabIndex = 18;
-            textBoxF4Contrast.TextChanged += textBoxF4Contrast_TextChanged;
+            textBoxF4Contrast.TextChanged += OnSettingChanged;
             // 
             // button1
             // 
@@ -732,7 +730,7 @@
             button1.TabStop = false;
             button1.Text = "Set INI";
             button1.UseVisualStyleBackColor = true;
-            button1.Click += button1_Click_1;
+            button1.Click += OnSettingChanged;
             // 
             // textboxStatusUpdates
             // 
@@ -789,7 +787,7 @@
             F5ActiveType.Name = "F5ActiveType";
             F5ActiveType.Size = new System.Drawing.Size(265, 23);
             F5ActiveType.TabIndex = 42;
-            F5ActiveType.SelectedIndexChanged += F5ActiveType_SelectedIndexChanged;
+            F5ActiveType.SelectedIndexChanged += OnSettingChanged;
             // 
             // F5DyncamicLabel
             // 
@@ -818,7 +816,7 @@
             textBoxF5ToleranceFilter.Name = "textBoxF5ToleranceFilter";
             textBoxF5ToleranceFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF5ToleranceFilter.TabIndex = 16;
-            textBoxF5ToleranceFilter.TextChanged += textBoxF5ToleranceFilter_TextChanged;
+            textBoxF5ToleranceFilter.TextChanged += OnSettingChanged;
             // 
             // F5RefineLabel
             // 
@@ -847,7 +845,7 @@
             textBoxF5FilterThresholdStepup.Name = "textBoxF5FilterThresholdStepup";
             textBoxF5FilterThresholdStepup.Size = new System.Drawing.Size(68, 23);
             textBoxF5FilterThresholdStepup.TabIndex = 14;
-            textBoxF5FilterThresholdStepup.TextChanged += textBoxF5FilterThresholdStepup_TextChanged;
+            textBoxF5FilterThresholdStepup.TextChanged += OnSettingChanged;
             // 
             // textBoxF5DespeckleFilter
             // 
@@ -856,7 +854,7 @@
             textBoxF5DespeckleFilter.Name = "textBoxF5DespeckleFilter";
             textBoxF5DespeckleFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF5DespeckleFilter.TabIndex = 15;
-            textBoxF5DespeckleFilter.TextChanged += textBoxF5DespeckleFilter_TextChanged;
+            textBoxF5DespeckleFilter.TextChanged += OnSettingChanged;
             // 
             // label23
             // 
@@ -885,7 +883,7 @@
             textBoxF5Despeckle.Name = "textBoxF5Despeckle";
             textBoxF5Despeckle.Size = new System.Drawing.Size(33, 23);
             textBoxF5Despeckle.TabIndex = 11;
-            textBoxF5Despeckle.TextChanged += textBoxF5Despeckle_TextChanged;
+            textBoxF5Despeckle.TextChanged += OnSettingChanged;
             // 
             // label25
             // 
@@ -904,7 +902,7 @@
             textBoxF5Brightness.Name = "textBoxF5Brightness";
             textBoxF5Brightness.Size = new System.Drawing.Size(68, 23);
             textBoxF5Brightness.TabIndex = 12;
-            textBoxF5Brightness.TextChanged += textBoxF5Brightness_TextChanged;
+            textBoxF5Brightness.TextChanged += OnSettingChanged;
             // 
             // F5Negative
             // 
@@ -917,7 +915,7 @@
             F5Negative.TabStop = false;
             F5Negative.Text = "Negative";
             F5Negative.UseVisualStyleBackColor = true;
-            F5Negative.CheckedChanged += F5Negative_CheckedChanged;
+            F5Negative.CheckedChanged += OnNegativeChanged;
             // 
             // label26
             // 
@@ -936,7 +934,7 @@
             textBoxF5Contrast.Name = "textBoxF5Contrast";
             textBoxF5Contrast.Size = new System.Drawing.Size(68, 23);
             textBoxF5Contrast.TabIndex = 10;
-            textBoxF5Contrast.TextChanged += textBoxF5Contrast_TextChanged;
+            textBoxF5Contrast.TextChanged += OnSettingChanged;
             // 
             // F6ThresholdSettings
             // 
@@ -974,7 +972,7 @@
             F6ActiveType.Name = "F6ActiveType";
             F6ActiveType.Size = new System.Drawing.Size(265, 23);
             F6ActiveType.TabIndex = 42;
-            F6ActiveType.SelectedIndexChanged += F6ActiveType_SelectedIndexChanged;
+            F6ActiveType.SelectedIndexChanged += OnSettingChanged;
             // 
             // F6DyncamicLabel
             // 
@@ -1003,7 +1001,7 @@
             textBoxF6ToleranceFilter.Name = "textBoxF6ToleranceFilter";
             textBoxF6ToleranceFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF6ToleranceFilter.TabIndex = 16;
-            textBoxF6ToleranceFilter.TextChanged += textBoxF6ToleranceFilter_TextChanged;
+            textBoxF6ToleranceFilter.TextChanged += OnSettingChanged;
             // 
             // F6RefineLabel
             // 
@@ -1032,7 +1030,7 @@
             textBoxF6FilterThresholdStepup.Name = "textBoxF6FilterThresholdStepup";
             textBoxF6FilterThresholdStepup.Size = new System.Drawing.Size(68, 23);
             textBoxF6FilterThresholdStepup.TabIndex = 14;
-            textBoxF6FilterThresholdStepup.TextChanged += textBoxF6FilterThresholdStepup_TextChanged;
+            textBoxF6FilterThresholdStepup.TextChanged += OnSettingChanged;
             // 
             // textBoxF6DespeckleFilter
             // 
@@ -1041,7 +1039,7 @@
             textBoxF6DespeckleFilter.Name = "textBoxF6DespeckleFilter";
             textBoxF6DespeckleFilter.Size = new System.Drawing.Size(33, 23);
             textBoxF6DespeckleFilter.TabIndex = 15;
-            textBoxF6DespeckleFilter.TextChanged += textBoxF6DespeckleFilter_TextChanged;
+            textBoxF6DespeckleFilter.TextChanged += OnSettingChanged;
             // 
             // label30
             // 
@@ -1070,7 +1068,7 @@
             textBoxF6Despeckle.Name = "textBoxF6Despeckle";
             textBoxF6Despeckle.Size = new System.Drawing.Size(33, 23);
             textBoxF6Despeckle.TabIndex = 11;
-            textBoxF6Despeckle.TextChanged += textBoxF6Despeckle_TextChanged;
+            textBoxF6Despeckle.TextChanged += OnSettingChanged;
             // 
             // label32
             // 
@@ -1089,7 +1087,7 @@
             textBoxF6Brightness.Name = "textBoxF6Brightness";
             textBoxF6Brightness.Size = new System.Drawing.Size(68, 23);
             textBoxF6Brightness.TabIndex = 12;
-            textBoxF6Brightness.TextChanged += textBoxF6Brightness_TextChanged;
+            textBoxF6Brightness.TextChanged += OnSettingChanged;
             // 
             // F6Negative
             // 
@@ -1102,7 +1100,7 @@
             F6Negative.TabStop = false;
             F6Negative.Text = "Negative";
             F6Negative.UseVisualStyleBackColor = true;
-            F6Negative.CheckedChanged += F6Negative_CheckedChanged;
+            F6Negative.CheckedChanged += OnNegativeChanged;
             // 
             // label33
             // 
@@ -1121,7 +1119,7 @@
             textBoxF6Contrast.Name = "textBoxF6Contrast";
             textBoxF6Contrast.Size = new System.Drawing.Size(68, 23);
             textBoxF6Contrast.TabIndex = 10;
-            textBoxF6Contrast.TextChanged += textBoxF6Contrast_TextChanged;
+            textBoxF6Contrast.TextChanged += OnSettingChanged;
             // 
             // Settings
             // 
@@ -1141,8 +1139,7 @@
             Name = "Settings";
             StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             Text = "ThresholdSettings";
-            Load += ThresholdSettings_Load;
-            AreaConvThresholdGroupbox.ResumeLayout(false);
+                        AreaConvThresholdGroupbox.ResumeLayout(false);
             AreaConvThresholdGroupbox.PerformLayout();
             AppOptionsGroupbox.ResumeLayout(false);
             AppOptionsGroupbox.PerformLayout();

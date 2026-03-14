@@ -49,7 +49,6 @@
             textBox1.Name = "textBox1";
             textBox1.Size = new System.Drawing.Size(1191, 31);
             textBox1.TabIndex = 16;
-            textBox1.TextChanged += textBox1_TextChanged;
             // 
             // button_go
             // 
@@ -98,7 +97,6 @@
             keyPicture1.Name = "keyPicture1";
             keyPicture1.Size = new System.Drawing.Size(1210, 1424);
             keyPicture1.TabIndex = 20;
-            keyPicture1.Paint += keyPicture1_Paint;
             // 
             // NextImage
             // 
@@ -143,7 +141,6 @@
             buPrecalcBorders.Text = "Precalc Borders";
             buPrecalcBorders.UseVisualStyleBackColor = true;
             buPrecalcBorders.Visible = false;
-            buPrecalcBorders.Click += button2_Click;
             // 
             // button1
             // 

@@ -16,8 +16,11 @@ public static class OpenThresholdBridge
     // Grayscale cache: preloaded from the current JPEG so threshold doesn't wait for disk.
     // _cachedGray uses the LUT formula (matches Recogniform DT internally).
     // _cachedGrayAvg uses the avg formula (matches Recogniform ImgConvertToGrayScale for Refine).
+    // _cachedBgr + _cachedBgrStride: raw BGR pixel data for photostat pipeline.
     private static byte[]  _cachedGray;
     private static byte[]  _cachedGrayAvg;
+    private static byte[]  _cachedBgr;
+    private static int     _cachedBgrStride;
     private static int     _cachedWidth;
     private static int     _cachedHeight;
     private static string  _cachedPath;
@@ -47,6 +50,7 @@ public static class OpenThresholdBridge
     private static Task _pendingSave;
     private static bool _saveRunning;
     private static byte[] _nextSavePixels;
+    private static byte[] _nextSavePacked; // pre-packed 1bpp data (skips packing in save)
     private static int _nextSaveWidth, _nextSaveHeight;
     private static string _nextSavePath;
     private static readonly object _saveLock = new object();
@@ -92,15 +96,31 @@ public static class OpenThresholdBridge
     {
         try
         {
-            var (gray, grayAvg, w, h) = RavenImaging.LoadImageAsGrayscaleDual(jpgPath);
+            // Load grayscale + BGR in one decode (photostat needs BGR for bleed-through).
+            var (grayLut, bgr, bgrStride, w, h) = RavenImaging.LoadImageAsGrayscaleAndBgr(jpgPath);
+
+            // Compute avg grayscale for Refine from the BGR data
+            byte[] grayAvg = new byte[w * h];
+            System.Threading.Tasks.Parallel.For(0, h, y =>
+            {
+                int srcRow = y * bgrStride;
+                int dstRow = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    int off = srcRow + x * 3;
+                    grayAvg[dstRow + x] = (byte)((bgr[off + 2] + bgr[off + 1] + bgr[off] + 1) / 3);
+                }
+            });
 
             lock (_cacheLock)
             {
-                _cachedGray    = gray;
-                _cachedGrayAvg = grayAvg;
-                _cachedWidth   = w;
-                _cachedHeight  = h;
-                _cachedPath    = jpgPath.ToLower();
+                _cachedGray      = grayLut;
+                _cachedGrayAvg   = grayAvg;
+                _cachedBgr       = bgr;
+                _cachedBgrStride = bgrStride;
+                _cachedWidth     = w;
+                _cachedHeight    = h;
+                _cachedPath      = jpgPath.ToLower();
             }
         }
         catch { }
@@ -131,7 +151,7 @@ public static class OpenThresholdBridge
     /// </remarks>
     public static void ClearCache()
     {
-        lock (_cacheLock)  { _cachedGray = null; _cachedGrayAvg = null; _cachedPath = null; }
+        lock (_cacheLock)  { _cachedGray = null; _cachedGrayAvg = null; _cachedBgr = null; _cachedPath = null; }
         lock (_tifLock)    { _cachedTif = null; _cachedTifPath = null; }
     }
 
@@ -141,7 +161,7 @@ public static class OpenThresholdBridge
     /// </summary>
     public static void ApplyThresholdToFile(string inputJpgPath, string outputTifPath,
         int windowW, int windowH, int contrast, int brightness,
-        bool refineThreshold = false, int refineTolerance = 10)
+        bool refineThreshold = false, int refineTolerance = 10, int despeckle = 0)
     {
         byte[] gray;     // LUT gray for DT
         byte[] grayAvg;  // avg gray for RefineThreshold
@@ -159,6 +179,13 @@ public static class OpenThresholdBridge
         byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
         if (refineThreshold)
             binary = RavenImaging.RefineThresholdApply(binary, grayAvg, width, height, refineTolerance);
+        byte[] packed = null;
+        if (despeckle > 0)
+        {
+            // Despeckle returns packed 1bpp data — reuse it for save to avoid double-packing
+            var result = RavenImaging.DespeckleBytesPacked(binary, width, height, despeckle, despeckle);
+            packed = result.packed;
+        }
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -173,7 +200,7 @@ public static class OpenThresholdBridge
 
         // Queue save in background — display updates before disk write finishes
         LastWriteMs = -1; // indicate save is pending
-        QueueSave(binary, width, height, outputTifPath);
+        QueueSave(binary, width, height, outputTifPath, packed);
     }
 
     /// <summary>
@@ -185,7 +212,7 @@ public static class OpenThresholdBridge
     public static void ApplyThresholdToFilePartial(string inputJpgPath, string outputTifPath,
         int x1, int y1, int x2, int y2,
         int windowW, int windowH, int contrast, int brightness,
-        bool refineThreshold = false, int refineTolerance = 10)
+        bool refineThreshold = false, int refineTolerance = 10, int despeckle = 0)
     {
         WaitForPendingSave(); // ensure previous save is on disk before we read/composite
 
@@ -228,6 +255,8 @@ public static class OpenThresholdBridge
         byte[] binary = RavenImaging.DynamicThresholdApply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
         if (refineThreshold)
             binary = RavenImaging.RefineThresholdApply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
+        if (despeckle > 0)
+            RavenImaging.DespeckleBytes(binary, cropW, cropH, despeckle, despeckle);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -276,23 +305,20 @@ public static class OpenThresholdBridge
     public static int ApplyThreshold(int imageHandle, int windowW, int windowH,
         int contrast, int brightness, string jpgPath = null)
     {
+        if (jpgPath == null)
+        {
+            // In-memory path — no disk I/O needed
+            RavenImaging.ImgDynamicThresholdAverage(imageHandle, windowW, windowH, contrast, brightness);
+            return imageHandle;
+        }
+
         byte[] gray;
         int width, height;
 
-        if (jpgPath != null && TryGetCache(jpgPath, out gray, out _, out width, out height))
+        if (TryGetCache(jpgPath, out gray, out _, out width, out height))
         { }
-        else if (jpgPath != null)
-        { (gray, _, width, height) = RavenImaging.LoadImageAsGrayscaleDual(jpgPath); }
         else
-        {
-            string tmpGray = Path.ChangeExtension(Path.GetTempFileName(), ".tif");
-            try
-            {
-                RavenImaging.ImgSaveAsTif(imageHandle, tmpGray, 0, 0);
-                (gray, width, height) = RavenImaging.LoadImageAsGrayscale(tmpGray);
-            }
-            finally { try { File.Delete(tmpGray); } catch { } }
-        }
+        { (gray, _, width, height) = RavenImaging.LoadImageAsGrayscaleDual(jpgPath); }
 
         byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
 
@@ -318,7 +344,7 @@ public static class OpenThresholdBridge
     /// </summary>
     public static void ApplyThresholdToFileNegative(string inputJpgPath, string outputTifPath,
         int windowW, int windowH, int contrast, int brightness,
-        bool refineThreshold = false, int refineTolerance = 10)
+        bool refineThreshold = false, int refineTolerance = 10, int despeckle = 0)
     {
         byte[] gray;     // LUT gray for DT
         byte[] grayAvg;  // avg gray for RefineThreshold
@@ -351,6 +377,8 @@ public static class OpenThresholdBridge
         byte[] binary = RavenImaging.DynamicThresholdApply(gray, width, height, windowW, windowH, contrast, brightness);
         if (refineThreshold)
             binary = RavenImaging.RefineThresholdApply(binary, grayAvg, width, height, refineTolerance);
+        if (despeckle > 0)
+            RavenImaging.DespeckleBytes(binary, width, height, despeckle, despeckle);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -372,7 +400,7 @@ public static class OpenThresholdBridge
     public static void ApplyThresholdToFilePartialNegative(string inputJpgPath, string outputTifPath,
         int x1, int y1, int x2, int y2,
         int windowW, int windowH, int contrast, int brightness,
-        bool refineThreshold = false, int refineTolerance = 10)
+        bool refineThreshold = false, int refineTolerance = 10, int despeckle = 0)
     {
         WaitForPendingSave(); // ensure previous save is on disk before we read/composite
 
@@ -419,6 +447,8 @@ public static class OpenThresholdBridge
         byte[] binary = RavenImaging.DynamicThresholdApply(cropGray, cropW, cropH, windowW, windowH, contrast, brightness);
         if (refineThreshold)
             binary = RavenImaging.RefineThresholdApply(binary, cropGrayAvg, cropW, cropH, refineTolerance);
+        if (despeckle > 0)
+            RavenImaging.DespeckleBytes(binary, cropW, cropH, despeckle, despeckle);
         sw.Stop();
         LastThresholdMs = sw.ElapsedMilliseconds;
 
@@ -456,6 +486,182 @@ public static class OpenThresholdBridge
 
 
 
+    /// <summary>
+    /// Full photostat (negative) pipeline on byte arrays. No GDI+ handles.
+    /// Optimized: cached BGR, fast bleedthrough (7x), overlapped borders + BT background,
+    /// parallel BT apply, 4-way parallel AT+DT. Total ~540ms with cache (was ~2000ms).
+    /// </summary>
+    public static void ApplyThresholdToFilePhotostat(string inputJpgPath, string outputTifPath,
+        int windowW, int windowH, int contrast, int brightness, int despeckle)
+    {
+        byte[] grayLut, bgr;
+        int bgrStride, W, H;
+
+        var sw = Stopwatch.StartNew();
+        if (TryGetCacheBgr(inputJpgPath, out grayLut, out bgr, out bgrStride, out W, out H))
+        { /* fastest — already in memory, BGR cloned */ }
+        else
+        { (grayLut, bgr, bgrStride, W, H) = RavenImaging.LoadImageAsGrayscaleAndBgr(inputJpgPath); }
+        sw.Stop();
+        LastDecodeMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
+
+        // Phase 1: Overlap border detection (on grayLut) with BT background detection (on BGR)
+        int T = 0;
+        int aLeft = 0, aTop = 0, aRight = 0, aBottom = 0;
+        int bLeft = 0, bTop = 0, bRight = 0, bBottom = 0;
+        int cLeft = 0, cTop = 0, cRight = 0, cBottom = 0;
+        int aW = 0, aH = 0, bW = 0, bH = 0, contentW = 0, contentH = 0;
+        byte[] aGray = null;
+        int btBgH = 0, btBgS = 0, btBgL = 0, btOtsu = 0;
+        bool borderFailed = false;
+
+        Parallel.Invoke(
+            () =>
+            {
+                // Border detection chain (uses grayLut only)
+                T = RavenImaging.NativeAutoThresholdPublic(grayLut, W, H, W, 2);
+                byte[] borderPacked = RavenImaging.ThresholdAndPack1bpp(grayLut, W, H, T);
+                int byteW = (W + 7) / 8;
+
+                aLeft   = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 0, 90.0, 1);
+                aTop    = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 2, 90.0, 1);
+                aRight  = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 1, 90.0, 1);
+                aBottom = RavenImaging.FindBlackBorderDirect(borderPacked, byteW, W, H, 1, 3, 90.0, 1);
+                if (aLeft > aRight || aTop > aBottom) { borderFailed = true; return; }
+
+                aW = aRight - aLeft + 1; aH = aBottom - aTop + 1;
+                aGray = RavenImaging.ExtractGrayscaleSubRegion(grayLut, W, aLeft, aTop, aRight, aBottom);
+                byte[] aCropPacked = RavenImaging.ThresholdAndPack1bpp(aGray, aW, aH, T);
+                int aCropByteW = (aW + 7) / 8;
+                for (int i = 0; i < aCropPacked.Length; i++) aCropPacked[i] = (byte)~aCropPacked[i];
+
+                bLeft   = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 0, 99.0, 1);
+                bTop    = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 2, 99.0, 1);
+                bRight  = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 1, 99.0, 1);
+                bBottom = RavenImaging.FindBlackBorderDirect(aCropPacked, aCropByteW, aW, aH, 1, 3, 99.0, 1);
+                bLeft += 20; bRight -= 20;
+                if (bLeft > bRight || bTop > bBottom) { borderFailed = true; return; }
+
+                bW = bRight - bLeft + 1; bH = bBottom - bTop + 1;
+                byte[] bGrayForBorder = RavenImaging.ExtractGrayscaleSubRegion(aGray, aW, bLeft, bTop, bRight, bBottom);
+                byte[] bCropPacked = RavenImaging.ThresholdAndPack1bpp(bGrayForBorder, bW, bH, T);
+                int bCropByteW = (bW + 7) / 8;
+                for (int i = 0; i < bCropPacked.Length; i++) bCropPacked[i] = (byte)~bCropPacked[i];
+
+                cLeft   = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 0, 80.0, 30);
+                cTop    = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 2, 80.0, 100);
+                cRight  = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 1, 80.0, 30);
+                cBottom = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 3, 80.0, 100);
+                contentW = cRight - cLeft + 1; contentH = cBottom - cTop + 1;
+            },
+            () =>
+            {
+                // BT background detection (uses BGR only, read-only)
+                RavenImaging.RemoveBleedThroughGetBackground(bgr, W, H, bgrStride,
+                    out btBgH, out btBgS, out btBgL, out btOtsu);
+            }
+        );
+
+        if (borderFailed) { sw.Stop(); LastThresholdMs = sw.ElapsedMilliseconds; LastWriteMs = 0; return; }
+
+        // Phase 2: Parallel BT apply (modifies BGR in-place, row-independent)
+        int nThreads = Environment.ProcessorCount;
+        int rowsPerThread = (H + nThreads - 1) / nThreads;
+        Parallel.For(0, nThreads, t =>
+        {
+            int startY = t * rowsPerThread;
+            int endY = Math.Min(startY + rowsPerThread, H);
+            if (startY < endY)
+                RavenImaging.RemoveBleedThroughApplyRows(bgr, W, H, bgrStride, 1,
+                    btBgH, btBgS, btBgL, startY, endY);
+        });
+
+        // Phase 3: Post-BT parallel processing
+        int absContentLeft  = aLeft + bLeft + cLeft;
+        int absContentTop   = aTop  + bTop  + cTop;
+        int absContentRight = aLeft + bLeft + cRight;
+        int absContentBottom = aTop + bTop + cBottom;
+        int absBLeft = aLeft + bLeft, absBTop = aTop + bTop;
+        int absBRight = aLeft + bRight, absBBottom = aTop + bBottom;
+
+        // Compute grayPost and contentGray in parallel (both from modified BGR)
+        byte[] grayPost = new byte[W * H];
+        byte[] contentGray = null;
+
+        Parallel.Invoke(
+            () =>
+            {
+                Parallel.For(0, H, y =>
+                {
+                    int srcRow = y * bgrStride;
+                    int dstRow = y * W;
+                    for (int x = 0; x < W; x++)
+                    {
+                        int off = srcRow + x * 3;
+                        grayPost[dstRow + x] = (byte)(RavenImaging.LutR[bgr[off + 2]]
+                            + RavenImaging.LutG[bgr[off + 1]] + RavenImaging.LutB[bgr[off]]);
+                    }
+                });
+            },
+            () =>
+            {
+                contentGray = RavenImaging.ExtractGrayscaleFromBgr(bgr, bgrStride,
+                    absContentLeft, absContentTop, absContentRight, absContentBottom, invert: true);
+            }
+        );
+
+        // Extract sub-regions from grayPost (fast memcpy)
+        byte[] aGrayPost = RavenImaging.ExtractGrayscaleSubRegion(grayPost, W, aLeft, aTop, aRight, aBottom);
+        byte[] bGrayPost = RavenImaging.ExtractGrayscaleSubRegion(grayPost, W, absBLeft, absBTop, absBRight, absBBottom);
+
+        // Phase 4: Run 4 tasks in parallel: 3x AT + content DT+cleanup
+        byte[] fullResult = new byte[W * H];
+        byte[] aResult = new byte[aW * aH];
+        byte[] bResult = new byte[bW * bH];
+        byte[] contentBinary = null;
+
+        Parallel.Invoke(
+            () => RavenImaging.AdaptiveThresholdApply(grayPost, fullResult, W, H, windowW, windowH, -1, -1),
+            () => RavenImaging.AdaptiveThresholdApply(aGrayPost, aResult, aW, aH, windowW, windowH, 40, 230),
+            () => RavenImaging.AdaptiveThresholdApply(bGrayPost, bResult, bW, bH, windowW, windowH, 40, 230),
+            () =>
+            {
+                contentBinary = RavenImaging.DynamicThresholdApply(contentGray, contentW, contentH,
+                    windowW, windowH, contrast, brightness);
+                byte[] contentPacked = RavenImaging.PackTo1bpp(contentBinary, contentW, contentH);
+                int cByteW = (contentW + 7) / 8;
+                if (despeckle > 0)
+                    RavenImaging.DespeckleApply(contentPacked, cByteW, contentW, contentH, despeckle, despeckle);
+                RavenImaging.RemoveBlackWiresDirect(contentPacked, cByteW, contentW, contentH);
+                int PhHeight = contentH - 10;
+                int PhRatio = PhHeight / 5;
+                int phBreaks = PhHeight - 15000;
+                RavenImaging.RemoveVerticalLinesDirect(contentPacked, cByteW, contentW, contentH, PhHeight, phBreaks, PhRatio);
+                RavenImaging.UnpackFrom1bpp(contentPacked, contentBinary, contentW, contentH);
+            }
+        );
+
+        // Composite: content → page → overscan → full
+        RavenImaging.CompositeBytes(contentBinary, contentW, contentH, bResult, bW, cLeft, cTop);
+        RavenImaging.CompositeBytes(bResult, bW, bH, aResult, aW, bLeft, bTop);
+        RavenImaging.CompositeBytes(aResult, aW, aH, fullResult, W, aLeft, aTop);
+
+        sw.Stop();
+        LastThresholdMs = sw.ElapsedMilliseconds;
+
+        lock (_tifLock)
+        {
+            _cachedTif     = fullResult;
+            _cachedTifW    = W;
+            _cachedTifH    = H;
+            _cachedTifPath = outputTifPath.ToLower();
+        }
+        LastWriteMs = -1;
+        QueueSave(fullResult, W, H, outputTifPath);
+    }
+
     // -------------------------------------------------------------------------
     // Background save
     // -------------------------------------------------------------------------
@@ -465,12 +671,14 @@ public static class OpenThresholdBridge
     /// stored and will run automatically when the current save finishes.
     /// If multiple requests arrive while a save is running, only the latest is kept.
     /// </summary>
-    private static void QueueSave(byte[] pixels, int width, int height, string outputPath)
+    private static void QueueSave(byte[] pixels, int width, int height, string outputPath,
+        byte[] packed = null)
     {
         lock (_saveLock)
         {
             // Always store the latest request (overwrites any previous queued request)
             _nextSavePixels = pixels;
+            _nextSavePacked = packed;
             _nextSaveWidth = width;
             _nextSaveHeight = height;
             _nextSavePath = outputPath;
@@ -489,10 +697,12 @@ public static class OpenThresholdBridge
     private static void StartNextSave()
     {
         byte[] pixels = _nextSavePixels;
+        byte[] packed = _nextSavePacked;
         int width = _nextSaveWidth;
         int height = _nextSaveHeight;
         string path = _nextSavePath;
         _nextSavePixels = null;
+        _nextSavePacked = null;
         _saveRunning = true;
 
         _pendingSave = Task.Run(() =>
@@ -500,7 +710,10 @@ public static class OpenThresholdBridge
             try
             {
                 var sw = Stopwatch.StartNew();
-                RavenImaging.SaveAsCcitt4Tif(pixels, width, height, path);
+                if (packed != null)
+                    RavenImaging.SaveAsCcitt4TifPacked(packed, width, height, path);
+                else
+                    RavenImaging.SaveAsCcitt4Tif(pixels, width, height, path);
                 sw.Stop();
                 LastWriteMs = sw.ElapsedMilliseconds;
                 OnSaveCompleted?.Invoke(sw.ElapsedMilliseconds);
@@ -537,6 +750,25 @@ public static class OpenThresholdBridge
             }
         }
         gray = null; grayAvg = null; width = height = 0;
+        return false;
+    }
+
+    private static bool TryGetCacheBgr(string jpgPath, out byte[] grayLut, out byte[] bgr,
+        out int bgrStride, out int width, out int height)
+    {
+        lock (_cacheLock)
+        {
+            if (_cachedGray != null && _cachedBgr != null && _cachedPath == jpgPath.ToLower())
+            {
+                grayLut   = _cachedGray;
+                bgr       = (byte[])_cachedBgr.Clone(); // clone because bleedthrough modifies it
+                bgrStride = _cachedBgrStride;
+                width     = _cachedWidth;
+                height    = _cachedHeight;
+                return true;
+            }
+        }
+        grayLut = null; bgr = null; bgrStride = 0; width = height = 0;
         return false;
     }
 
