@@ -326,180 +326,20 @@ namespace RAVEN
             }
         }
 
-        private void button1_Click(object sender, EventArgs e)
+        private void buBatch_Click(object sender, EventArgs e)
         {
-            if (F2ActiveType.Text != "Dynamic" && F2ActiveType.Text != "ML1" && F2ActiveType.Text != "ML2")
+            if (this.Owner is Form1 mainForm)
             {
-                MessageBox.Show("Convert Rest of Book only supports Dynamic/ML1/ML2 Threshold");
-                return; 
-            }
-
-            
-            
-
-            // Where is the thing that figures out if this is DYnamic or other one? Does it just go w Dynamic all the time? If so need to say other one is not supported. Then also SBB not supported.
-            // Then unsupport doing "areas" for both SBB & (maybe) Dynamic
-            
-            // Get the main form and relevant values
-            var mainForm = this.Owner as Form1;
-            var imagePairs = mainForm.ImagePairs;
-            int currentImageIndex = mainForm.currentImageIndex;
-            
-
-            if (F2ActiveType.Text == "ML1" || F2ActiveType.Text == "ML2")
-            {
-                // Generate the list of files to convert without copying them
-                for (int i = currentImageIndex; i < imagePairs.Count; i++)
-                {
-                    string originalJpgPath = imagePairs[i].JPG;
-                    string originalTifPath = imagePairs[i].TIF;                   
-                    mainForm.ThresholdMe(mainForm.F2Settings, - 1, -1, -1, -1, originalJpgPath, originalTifPath, false, true); 
-                }
-            }
-
-            else if (F2ActiveType.Text == "Dynamic")
-            {
-                MessageBox.Show("Dynamic batch conversion has been removed.\n" +
-                    "Use RDynamic or ML1/ML2 instead.",
-                    "Feature Removed", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            // Update UI to indicate completion
-            this.Invoke((Action)(() =>
-            {
-                this.Text = "Conversion Complete";
-                buConvertBook.Enabled = true;
-            }));
-
-        }
-
-
-
-
-
-        private void ConvertImage(string jpg, string tif, int contrast, int brightness)
-        {
-            //We only proceed to photostat convert if the "Negative" is checked
-            if (this.F2Negative.Checked == true)
-            {
-                ConvertPhotostat(jpg, tif, contrast, brightness);
+                mainForm.BatchModeToggle();
             }
         }
 
-        private void ConvertPhotostat(string jpg, string tif, int contrast, int brightness)
+        private void buBatchProcess_Click(object sender, EventArgs e)
         {
-            bool Despeckle = true;
-            bool CropOverscan = true;
-
-            int Copy1 = 0;
-            int Copy2 = 0; 
-
-
-            int ImageHandle = RavenImaging.ImgOpen(jpg, 0);
-
-            // A = Overscan 
-            // B = Page border outside of photostat
-            // C = Photostat
-            
-
-            int CopyOfImage = RavenImaging.ImgDuplicate(ImageHandle);
-
-            RavenImaging.ImgAdaptiveThresholdAverage(CopyOfImage, 7, 7, -1, -1);
-            
-
-
-
-
-            int aLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 90.0, 1);
-            int aTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 90.0, 1);
-            int aRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 90.0, 1);
-            int aBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 90.0, 1);
-
-            if (aLeft < aRight && aTop < aBottom)
+            if (this.Owner is Form1 mainForm)
             {
-                RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
+                mainForm.BatchProcess();
             }
-
-            RavenImaging.ImgInvert(CopyOfImage);
-
-            int bLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 99.0, 1);
-            int bTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 99.0, 1);
-            int bRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 99.0, 1);
-            int bBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 99.0, 1);
-
-            bLeft = bLeft + 20;
-            bRight = bRight - 20;
-
-            if (bLeft <= bRight && bTop <= bBottom)
-            {
-                RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
-            }
-
-            int cLeft = RavenImaging.ImgFindBlackBorderLeft(CopyOfImage, 80.0, 30);
-            int cTop = RavenImaging.ImgFindBlackBorderTop(CopyOfImage, 80.0, 100);
-            int cRight = RavenImaging.ImgFindBlackBorderRight(CopyOfImage, 80.0, 30);
-            int cBottom = RavenImaging.ImgFindBlackBorderBottom(CopyOfImage, 80.0, 100);
-
-            cLeft = cLeft + 20;
-            cRight = cRight - 20;
-            cTop = cTop + 20;
-            cBottom = cBottom - 20;
-
-            RavenImaging.ImgDelete(CopyOfImage);
-
-            RavenImaging.ImgRemoveBleedThrough(ImageHandle, 1);
-
-            if (aLeft<=aRight && aTop <= aBottom)
-            {
-                Copy1 = RavenImaging.ImgCopy(ImageHandle, aLeft, aTop, aRight, aBottom);
-            }
-
-            if (bLeft<=bRight && bTop <= bBottom)
-            {
-                Copy2 = RavenImaging.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
-            }
-
-            int Photostat = RavenImaging.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
-
-            RavenImaging.ImgInvert(Photostat);
-
-            {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                if (F2ActiveType.SelectedItem?.ToString() == "RDynamic")
-                    Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
-                else
-                    RavenImaging.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
-                sw.Stop();
-                AddStatusUpdate($"Threshold: {sw.ElapsedMilliseconds}ms ({F2ActiveType.SelectedItem})");
-            }
-
-            if (Despeckle == true)
-            {
-                RavenImaging.ImgDespeckle(Photostat, 3, 3);
-            }
-
-            RavenImaging.ImgRemoveBlackWires(Photostat);
-
-            int PhHeight = RavenImaging.ImgGetHeight(Photostat) - 10;
-            int PhRatio = PhHeight / 5;
-            int PhBreaks = PhHeight - 15000;
-            RavenImaging.ImgRemoveVerticalLines(Photostat, PhHeight, PhBreaks, PhRatio, false, true);
-
-            RavenImaging.ImgAdaptiveThresholdAverage(ImageHandle, 7, 7, -1, -1);
-            RavenImaging.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
-            RavenImaging.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
-
-            RavenImaging.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
-            RavenImaging.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
-            RavenImaging.ImgAddCopy(ImageHandle, Copy1, aLeft, aTop);
-
-            File.Delete(tif);
-            RavenImaging.ImgSaveAsTif(ImageHandle, tif, 5, 0);
-
-            RavenImaging.ImgDelete(Photostat);
-            RavenImaging.ImgDelete(Copy1);
-            RavenImaging.ImgDelete(Copy2);
-            RavenImaging.ImgDelete(ImageHandle);
-
         }
 
         private void ShowJPG_CheckedChanged(object sender, EventArgs e)

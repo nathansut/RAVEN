@@ -928,7 +928,7 @@ public static class RavenImaging
         return results;
     }
 
-    // ── Phase 2: Threshold (non-RDynamic fallback paths) ──────────────
+    // ── Phase 2: Threshold (non-Dynamic fallback paths) ──────────────
 
     /// <summary>
     /// Local dynamic threshold. Handles -1/-2 sentinel values for auto-detection.

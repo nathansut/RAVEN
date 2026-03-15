@@ -33,7 +33,8 @@
             label2 = new System.Windows.Forms.Label();
             textBoxF2Brightness = new System.Windows.Forms.TextBox();
             F2Negative = new System.Windows.Forms.CheckBox();
-            buConvertBook = new System.Windows.Forms.Button();
+            buBatch = new System.Windows.Forms.Button();
+            buBatchProcess = new System.Windows.Forms.Button();
             AreaConvThresholdGroupbox = new System.Windows.Forms.GroupBox();
             F2ActiveType = new System.Windows.Forms.ComboBox();
             AreaConvDyncamicLabel = new System.Windows.Forms.Label();
@@ -82,7 +83,6 @@
             F4Negative = new System.Windows.Forms.CheckBox();
             label22 = new System.Windows.Forms.Label();
             textBoxF4Contrast = new System.Windows.Forms.TextBox();
-            button1 = new System.Windows.Forms.Button();
             textboxStatusUpdates = new System.Windows.Forms.RichTextBox();
             StatusUpdates = new System.Windows.Forms.Label();
             F5ThresholdSettings = new System.Windows.Forms.GroupBox();
@@ -178,17 +178,32 @@
             F2Negative.UseVisualStyleBackColor = true;
             F2Negative.CheckedChanged += OnNegativeChanged;
             // 
-            // buConvertBook
+            // buBatch
             // 
-            buConvertBook.Location = new System.Drawing.Point(170, 126);
-            buConvertBook.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
-            buConvertBook.Name = "buConvertBook";
-            buConvertBook.Size = new System.Drawing.Size(144, 27);
-            buConvertBook.TabIndex = 5;
-            buConvertBook.TabStop = false;
-            buConvertBook.Text = "Convert Rest of Book";
-            buConvertBook.UseVisualStyleBackColor = true;
-            buConvertBook.Click += button1_Click;
+            buBatch.Font = new System.Drawing.Font("Segoe UI", 8F);
+            buBatch.Location = new System.Drawing.Point(1, 134);
+            buBatch.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            buBatch.Name = "buBatch";
+            buBatch.Size = new System.Drawing.Size(99, 23);
+            buBatch.TabIndex = 5;
+            buBatch.TabStop = false;
+            buBatch.Text = "Batch Mode ( [ )";
+            buBatch.UseVisualStyleBackColor = true;
+            buBatch.Click += buBatch_Click;
+            // 
+            // buBatchProcess
+            // 
+            buBatchProcess.Font = new System.Drawing.Font("Segoe UI", 8F);
+            buBatchProcess.Location = new System.Drawing.Point(101, 134);
+            buBatchProcess.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            buBatchProcess.Name = "buBatchProcess";
+            buBatchProcess.Size = new System.Drawing.Size(79, 23);
+            buBatchProcess.TabIndex = 43;
+            buBatchProcess.TabStop = false;
+            buBatchProcess.Text = "Process ( ] )";
+            buBatchProcess.UseVisualStyleBackColor = true;
+            buBatchProcess.Visible = false;
+            buBatchProcess.Click += buBatchProcess_Click;
             // 
             // AreaConvThresholdGroupbox
             // 
@@ -204,7 +219,8 @@
             AreaConvThresholdGroupbox.Controls.Add(label3);
             AreaConvThresholdGroupbox.Controls.Add(textBoxF2Despeckle);
             AreaConvThresholdGroupbox.Controls.Add(label1);
-            AreaConvThresholdGroupbox.Controls.Add(buConvertBook);
+            AreaConvThresholdGroupbox.Controls.Add(buBatch);
+            AreaConvThresholdGroupbox.Controls.Add(buBatchProcess);
             AreaConvThresholdGroupbox.Controls.Add(textBoxF2Brightness);
             AreaConvThresholdGroupbox.Controls.Add(F2Negative);
             AreaConvThresholdGroupbox.Controls.Add(label2);
@@ -217,11 +233,11 @@
             AreaConvThresholdGroupbox.TabIndex = 32;
             AreaConvThresholdGroupbox.TabStop = false;
             AreaConvThresholdGroupbox.Text = "F2";
-                        // 
+            // 
             // F2ActiveType
             // 
             F2ActiveType.FormattingEnabled = true;
-            F2ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
+            F2ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
             F2ActiveType.Location = new System.Drawing.Point(1, 22);
             F2ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F2ActiveType.Name = "F2ActiveType";
@@ -232,10 +248,10 @@
             // AreaConvDyncamicLabel
             // 
             AreaConvDyncamicLabel.AutoSize = true;
-            AreaConvDyncamicLabel.Location = new System.Drawing.Point(-4, 53);
+            AreaConvDyncamicLabel.Location = new System.Drawing.Point(-4, 56);
             AreaConvDyncamicLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             AreaConvDyncamicLabel.Name = "AreaConvDyncamicLabel";
-            AreaConvDyncamicLabel.Size = new System.Drawing.Size(115, 15);
+            AreaConvDyncamicLabel.Size = new System.Drawing.Size(116, 15);
             AreaConvDyncamicLabel.TabIndex = 40;
             AreaConvDyncamicLabel.Text = "Dyncamic Threshold";
             // 
@@ -245,7 +261,7 @@
             label7.Location = new System.Drawing.Point(10, 245);
             label7.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             label7.Name = "label7";
-            label7.Size = new System.Drawing.Size(57, 15);
+            label7.Size = new System.Drawing.Size(58, 15);
             label7.TabIndex = 38;
             label7.Text = "Tolerance";
             // 
@@ -261,10 +277,10 @@
             // AreaConvRefineLabel
             // 
             AreaConvRefineLabel.AutoSize = true;
-            AreaConvRefineLabel.Location = new System.Drawing.Point(0, 157);
+            AreaConvRefineLabel.Location = new System.Drawing.Point(0, 166);
             AreaConvRefineLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             AreaConvRefineLabel.Name = "AreaConvRefineLabel";
-            AreaConvRefineLabel.Size = new System.Drawing.Size(92, 15);
+            AreaConvRefineLabel.Size = new System.Drawing.Size(93, 15);
             AreaConvRefineLabel.TabIndex = 36;
             AreaConvRefineLabel.Text = "RefineThreshold";
             // 
@@ -305,7 +321,7 @@
             label4.Size = new System.Drawing.Size(92, 15);
             label4.TabIndex = 34;
             label4.Text = "Contrast Stepup";
-                        // 
+            // 
             // label3
             // 
             label3.AutoSize = true;
@@ -380,7 +396,7 @@
             // F3ActiveType
             // 
             F3ActiveType.FormattingEnabled = true;
-            F3ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
+            F3ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
             F3ActiveType.Location = new System.Drawing.Point(1, 22);
             F3ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F3ActiveType.Name = "F3ActiveType";
@@ -394,7 +410,7 @@
             F3DyncamicLabel.Location = new System.Drawing.Point(0, 58);
             F3DyncamicLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F3DyncamicLabel.Name = "F3DyncamicLabel";
-            F3DyncamicLabel.Size = new System.Drawing.Size(115, 15);
+            F3DyncamicLabel.Size = new System.Drawing.Size(116, 15);
             F3DyncamicLabel.TabIndex = 39;
             F3DyncamicLabel.Text = "Dyncamic Threshold";
             // 
@@ -404,7 +420,7 @@
             label8.Location = new System.Drawing.Point(10, 242);
             label8.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             label8.Name = "label8";
-            label8.Size = new System.Drawing.Size(57, 15);
+            label8.Size = new System.Drawing.Size(58, 15);
             label8.TabIndex = 38;
             label8.Text = "Tolerance";
             // 
@@ -423,7 +439,7 @@
             F3RefineLabel.Location = new System.Drawing.Point(0, 156);
             F3RefineLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F3RefineLabel.Name = "F3RefineLabel";
-            F3RefineLabel.Size = new System.Drawing.Size(92, 15);
+            F3RefineLabel.Size = new System.Drawing.Size(93, 15);
             F3RefineLabel.TabIndex = 36;
             F3RefineLabel.Text = "RefineThreshold";
             // 
@@ -565,7 +581,7 @@
             // F4ActiveType
             // 
             F4ActiveType.FormattingEnabled = true;
-            F4ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
+            F4ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
             F4ActiveType.Location = new System.Drawing.Point(0, 22);
             F4ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F4ActiveType.Name = "F4ActiveType";
@@ -579,7 +595,7 @@
             F4DyncamicLabel.Location = new System.Drawing.Point(-4, 53);
             F4DyncamicLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F4DyncamicLabel.Name = "F4DyncamicLabel";
-            F4DyncamicLabel.Size = new System.Drawing.Size(109, 15);
+            F4DyncamicLabel.Size = new System.Drawing.Size(110, 15);
             F4DyncamicLabel.TabIndex = 40;
             F4DyncamicLabel.Text = "Dynamic Threshold";
             // 
@@ -589,7 +605,7 @@
             label16.Location = new System.Drawing.Point(10, 242);
             label16.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             label16.Name = "label16";
-            label16.Size = new System.Drawing.Size(57, 15);
+            label16.Size = new System.Drawing.Size(58, 15);
             label16.TabIndex = 38;
             label16.Text = "Tolerance";
             // 
@@ -608,7 +624,7 @@
             F4RefineLabel.Location = new System.Drawing.Point(-4, 163);
             F4RefineLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F4RefineLabel.Name = "F4RefineLabel";
-            F4RefineLabel.Size = new System.Drawing.Size(92, 15);
+            F4RefineLabel.Size = new System.Drawing.Size(93, 15);
             F4RefineLabel.TabIndex = 36;
             F4RefineLabel.Text = "RefineThreshold";
             // 
@@ -720,18 +736,6 @@
             textBoxF4Contrast.TabIndex = 18;
             textBoxF4Contrast.TextChanged += OnSettingChanged;
             // 
-            // button1
-            // 
-            button1.Location = new System.Drawing.Point(114, 70);
-            button1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
-            button1.Name = "button1";
-            button1.Size = new System.Drawing.Size(130, 27);
-            button1.TabIndex = 39;
-            button1.TabStop = false;
-            button1.Text = "Set INI";
-            button1.UseVisualStyleBackColor = true;
-            button1.Click += OnSettingChanged;
-            // 
             // textboxStatusUpdates
             // 
             textboxStatusUpdates.Location = new System.Drawing.Point(7, 997);
@@ -781,7 +785,7 @@
             // F5ActiveType
             // 
             F5ActiveType.FormattingEnabled = true;
-            F5ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
+            F5ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
             F5ActiveType.Location = new System.Drawing.Point(1, 22);
             F5ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F5ActiveType.Name = "F5ActiveType";
@@ -795,7 +799,7 @@
             F5DyncamicLabel.Location = new System.Drawing.Point(0, 58);
             F5DyncamicLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F5DyncamicLabel.Name = "F5DyncamicLabel";
-            F5DyncamicLabel.Size = new System.Drawing.Size(109, 15);
+            F5DyncamicLabel.Size = new System.Drawing.Size(110, 15);
             F5DyncamicLabel.TabIndex = 39;
             F5DyncamicLabel.Text = "Dynamic Threshold";
             // 
@@ -805,7 +809,7 @@
             label9.Location = new System.Drawing.Point(10, 242);
             label9.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             label9.Name = "label9";
-            label9.Size = new System.Drawing.Size(57, 15);
+            label9.Size = new System.Drawing.Size(58, 15);
             label9.TabIndex = 38;
             label9.Text = "Tolerance";
             // 
@@ -824,7 +828,7 @@
             F5RefineLabel.Location = new System.Drawing.Point(0, 156);
             F5RefineLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F5RefineLabel.Name = "F5RefineLabel";
-            F5RefineLabel.Size = new System.Drawing.Size(92, 15);
+            F5RefineLabel.Size = new System.Drawing.Size(93, 15);
             F5RefineLabel.TabIndex = 36;
             F5RefineLabel.Text = "RefineThreshold";
             // 
@@ -966,7 +970,7 @@
             // F6ActiveType
             // 
             F6ActiveType.FormattingEnabled = true;
-            F6ActiveType.Items.AddRange(new object[] { "Dynamic", "RDynamic", "Refine", "ML1", "ML2" });
+            F6ActiveType.Items.AddRange(new object[] { "Dynamic", "Refine", "ML1", "ML2" });
             F6ActiveType.Location = new System.Drawing.Point(1, 22);
             F6ActiveType.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             F6ActiveType.Name = "F6ActiveType";
@@ -980,7 +984,7 @@
             F6DyncamicLabel.Location = new System.Drawing.Point(0, 58);
             F6DyncamicLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F6DyncamicLabel.Name = "F6DyncamicLabel";
-            F6DyncamicLabel.Size = new System.Drawing.Size(115, 15);
+            F6DyncamicLabel.Size = new System.Drawing.Size(116, 15);
             F6DyncamicLabel.TabIndex = 39;
             F6DyncamicLabel.Text = "Dyncamic Threshold";
             // 
@@ -990,7 +994,7 @@
             label27.Location = new System.Drawing.Point(10, 242);
             label27.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             label27.Name = "label27";
-            label27.Size = new System.Drawing.Size(57, 15);
+            label27.Size = new System.Drawing.Size(58, 15);
             label27.TabIndex = 38;
             label27.Text = "Tolerance";
             // 
@@ -1009,7 +1013,7 @@
             F6RefineLabel.Location = new System.Drawing.Point(0, 156);
             F6RefineLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             F6RefineLabel.Name = "F6RefineLabel";
-            F6RefineLabel.Size = new System.Drawing.Size(92, 15);
+            F6RefineLabel.Size = new System.Drawing.Size(93, 15);
             F6RefineLabel.TabIndex = 36;
             F6RefineLabel.Text = "RefineThreshold";
             // 
@@ -1130,7 +1134,6 @@
             Controls.Add(F5ThresholdSettings);
             Controls.Add(StatusUpdates);
             Controls.Add(textboxStatusUpdates);
-            Controls.Add(button1);
             Controls.Add(F4ThresholdSettings);
             Controls.Add(F3ThresholdSettings);
             Controls.Add(AppOptionsGroupbox);
@@ -1139,7 +1142,7 @@
             Name = "Settings";
             StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             Text = "ThresholdSettings";
-                        AreaConvThresholdGroupbox.ResumeLayout(false);
+            AreaConvThresholdGroupbox.ResumeLayout(false);
             AreaConvThresholdGroupbox.PerformLayout();
             AppOptionsGroupbox.ResumeLayout(false);
             AppOptionsGroupbox.PerformLayout();
@@ -1162,7 +1165,8 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.TextBox textBoxF2Brightness;
         private System.Windows.Forms.CheckBox F2Negative;
-        private System.Windows.Forms.Button buConvertBook;
+        internal System.Windows.Forms.Button buBatch;
+        internal System.Windows.Forms.Button buBatchProcess;
         private System.Windows.Forms.GroupBox AreaConvThresholdGroupbox;
         private System.Windows.Forms.GroupBox AppOptionsGroupbox;
         private System.Windows.Forms.CheckBox ShowJPG;
@@ -1205,7 +1209,6 @@
         private System.Windows.Forms.CheckBox F4Negative;
         private System.Windows.Forms.Label label22;
         private System.Windows.Forms.TextBox textBoxF4Contrast;
-        private System.Windows.Forms.Button button1;
         private System.Windows.Forms.Label F3DyncamicLabel;
         private System.Windows.Forms.Label AreaConvDyncamicLabel;
         private System.Windows.Forms.ComboBox F3ActiveType;

@@ -8,8 +8,8 @@ using System.Threading.Tasks;
 namespace RAVEN;
 
 /// <summary>
-/// Pure C# threshold pipeline for RDynamic.
-/// Caching and orchestration layer for RDynamic/Refine paths. All image I/O via RavenImaging (GDI+).
+/// Pure C# threshold pipeline for Dynamic.
+/// Caching and orchestration layer for Dynamic/Refine paths. All image I/O via RavenImaging (GDI+).
 /// </summary>
 public static class OpenThresholdBridge
 {
@@ -300,7 +300,7 @@ public static class OpenThresholdBridge
 
     /// <summary>
     /// Drop-in replacement for RavenImaging.ImgDynamicThresholdAverage (handle-based).
-    /// Only used for non-RDynamic fallback paths.
+    /// Only used by ThresholdSettings.ConvertPhotostat for the "Convert Rest of Book" legacy path.
     /// </summary>
     public static int ApplyThreshold(int imageHandle, int windowW, int windowH,
         int contrast, int brightness, string jpgPath = null)
@@ -555,6 +555,7 @@ public static class OpenThresholdBridge
                 cRight  = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 1, 80.0, 30);
                 cBottom = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 3, 80.0, 100);
                 contentW = cRight - cLeft + 1; contentH = cBottom - cTop + 1;
+                if (contentW <= 0 || contentH <= 0) { borderFailed = true; return; }
             },
             () =>
             {
@@ -564,7 +565,50 @@ public static class OpenThresholdBridge
             }
         );
 
-        if (borderFailed) { sw.Stop(); LastThresholdMs = sw.ElapsedMilliseconds; LastWriteMs = 0; return; }
+        if (borderFailed)
+        {
+            // Border detection failed — convert the full inverted image instead
+            int nT = Environment.ProcessorCount;
+            int rpt = (H + nT - 1) / nT;
+            Parallel.For(0, nT, t =>
+            {
+                int sy = t * rpt;
+                int ey = Math.Min(sy + rpt, H);
+                if (sy < ey)
+                    RavenImaging.RemoveBleedThroughApplyRows(bgr, W, H, bgrStride, 1,
+                        btBgH, btBgS, btBgL, sy, ey);
+            });
+
+            byte[] grayInv = RavenImaging.ExtractGrayscaleFromBgr(bgr, bgrStride,
+                0, 0, W - 1, H - 1, invert: true);
+
+            byte[] fallbackResult = RavenImaging.DynamicThresholdApply(grayInv, W, H,
+                windowW, windowH, contrast, brightness);
+            byte[] fallbackPacked = RavenImaging.PackTo1bpp(fallbackResult, W, H);
+            int fbByteW = (W + 7) / 8;
+            if (despeckle > 0)
+                RavenImaging.DespeckleApply(fallbackPacked, fbByteW, W, H, despeckle, despeckle);
+            RavenImaging.RemoveBlackWiresDirect(fallbackPacked, fbByteW, W, H);
+            int PhHeight = H - 10;
+            int PhRatio = PhHeight / 5;
+            int phBreaks = PhHeight - 15000;
+            RavenImaging.RemoveVerticalLinesDirect(fallbackPacked, fbByteW, W, H, PhHeight, phBreaks, PhRatio);
+            RavenImaging.UnpackFrom1bpp(fallbackPacked, fallbackResult, W, H);
+
+            sw.Stop();
+            LastThresholdMs = sw.ElapsedMilliseconds;
+
+            lock (_tifLock)
+            {
+                _cachedTif     = fallbackResult;
+                _cachedTifW    = W;
+                _cachedTifH    = H;
+                _cachedTifPath = outputTifPath.ToLower();
+            }
+            LastWriteMs = -1;
+            QueueSave(fallbackResult, W, H, outputTifPath);
+            return;
+        }
 
         // Phase 2: Parallel BT apply (modifies BGR in-place, row-independent)
         int nThreads = Environment.ProcessorCount;

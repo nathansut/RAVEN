@@ -2,7 +2,7 @@
   "profiles": {
     "RAVEN": {
       "commandName": "Project",
-      "workingDirectory": "bin\\Debug\\net6.0-windows",
+      "workingDirectory": "bin\\Debug\\net8.0-windows",
       "nativeDebugging": true
     }
   }

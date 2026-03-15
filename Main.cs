@@ -104,7 +104,7 @@ namespace RAVEN
                     if (prop.PropertyType == typeof(ComboBox))
                     {
                         ComboBox comboBox = (ComboBox)prop.GetValue(this);
-                        value = comboBox.SelectedItem?.ToString() ?? "Dynamic"; 
+                        value = comboBox.SelectedItem?.ToString() ?? "Dynamic";
                     }
 
                     // Only update if the value has changed or doesn't exist
@@ -157,6 +157,8 @@ namespace RAVEN
                     }
                 }
 
+                // Migrate old "RDynamic" setting from legacy settings.ini
+                if (this.Type == "RDynamic") this.Type = "Dynamic";
             }
         }
 
@@ -495,7 +497,7 @@ namespace RAVEN
             }
             else
             {
-                textBox1.Text = @"C:\temp\1a";
+                textBox1.Text = @"C:\temp\TestIMG\Compact\Record_1142";
             }
 
             // Attach to Load event of Form1
@@ -1321,150 +1323,354 @@ namespace RAVEN
 
 
         // Alternate multipage modify — area-based conversion across pages.
-        private void MultipageModifyAlt(Keys pressedKey)
+        // ============================================================
+        // Batch Mode — tracks whether we have a full-page entry vs area entries
+        // ============================================================
+        private bool _batchHasFullPage = false;
+
+        /// <summary>Map F-key to annotation color int for overlay display.</summary>
+        private static int FKeyToColor(Keys key)
         {
-            // [ = Initialize / Uninitialize & Clear Cordinates
-            // ] = Run & then Uninitialize 
-
-            //Was [ key pressed (initialize) & initialize not already set?
-
-            bool IsDynamicOrML(string type) => type == "Dynamic" || type == "RDynamic" || type == "Refine" || type == "ML1" || type == "ML2";
-
-            if (pressedKey == Keys.OemOpenBrackets)
+            switch (key)
             {
-                if (vMultipageModifyMode == MultipageModifyMode.Uninitialized)
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.InitializedEveryPage;
-                    AddStatusUpdate("Area Conversion InitializeEveryPage");
-                }
-                else if (vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage)
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.InitializedEveryOtherPage;
-                    AddStatusUpdate("Area Conversion InitializeEveryOtherPage");
-                }
-                else
-                {
-                    this.vMultipageModifyMode = MultipageModifyMode.Uninitialized;
-                    AddStatusUpdate("Area Conversion Uninitialized", true);
-                    vMultipageModifyList.Clear();
-                }
+                case Keys.F2: return 2;
+                case Keys.F3: return 3;
+                case Keys.F4: return 4;
+                case Keys.F5: return 5;
+                case Keys.F6: return 6;
+                default: return 1;
             }
-
-            // If we are initialized & an F2/F3/F4 key has been pressed, we will check dimensions & TIF tag for fine rotate. If they match - we apply the F key settings to the cordinates & add to a list. 
-            if ((this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage || this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) && (pressedKey == Keys.F2 || pressedKey == Keys.F3 || pressedKey == Keys.F4 || pressedKey == Keys.F5 || pressedKey == Keys.F6))
-            {
-                if (!VerifyMatchingDimensions(ImagePairs[currentImageIndex].TIF, ImagePairs[currentImageIndex].JPG))
-                {
-                    MessageBox.Show("TIF/JPG Dimensions don't match!");
-                }
-                else
-                {
-                    var settings = GetSettingsForKey(pressedKey);
-                    if (settings != null && !IsDynamicOrML(settings.Type))
-                    {
-                        MessageBox.Show("This feature only works for Dynamic & SBB Thresholding.");
-                    }
-                    else
-                    {
-                        int _left = keyPicture2.GetSelectedLeft();
-                        int _top = keyPicture2.GetSelectedTop();
-                        int _right = keyPicture2.GetSelectedRight();
-                        int _bottom = keyPicture2.GetSelectedBottom();
-
-                        AddStatusUpdate("Drawbox Dimensions" + _left.ToString() + "," + _top.ToString() + "," + _right.ToString() + _bottom.ToString() + "," + pressedKey.ToString());
-
-                        // With this:
-                        var settings1 = GetSettingsForKey(pressedKey);
-                        if (settings1 != null)
-                        {
-                            vMultipageModifyList.Add(Tuple.Create(_left, _top, _right, _bottom, settings1));
-                        }
-                    }
-                }
-                ClearSelection();
-            }
-
-
-            // Move starting here 
-
-            if ((this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage || this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) && pressedKey == Keys.OemCloseBrackets)
-            {
-                if (vMultipageModifyList.Count == 0)
-                {
-                    AddStatusUpdate("No modifications to apply.");
-                    return; // This will exit the entire method
-                }
-
-                bool hasSBB = false;
-                bool hasDynamic = false;
-
-                foreach (var item in vMultipageModifyList)
-                {
-                    string type = item.Item5.Type; 
-                    if (type == "ML1" || type == "ML2")
-                    {
-                        hasSBB = true;
-                    }
-                    if (type == "Dynamic" || type == "RDynamic" || type == "Refine")
-                    {
-                        hasDynamic = true;
-                    }
-                }
-
-                if (hasDynamic && hasSBB)
-                {
-                    MessageBox.Show("Currently only supports doing one conversion type.");
-                    return;
-                }
-                else if (hasDynamic)
-                {
-                    MultipageModifyAlt_Dynamic();
-                }
-                else if (hasSBB)
-                {
-                    MultipageModifyAlt_SBB();
-                }
-                this.vMultipageModifyMode = MultipageModifyMode.Uninitialized;
-                AddStatusUpdate("Area Conversion Uninitialized", true);
-                RefreshDisplayImage();
-            }
-            // Move ending here 
         }
 
-        private void MultipageModifyAlt_SBB()
+        /// <summary>Map F-key to display label.</summary>
+        private static string FKeyLabel(Keys key)
         {
-            // Loop thru each additional image in book
-            var _imagePairs = this.ImagePairs;
-            int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
-            for (int i = currentImageIndex; i < _imagePairs.Count; i += increment)
+            switch (key)
             {
-                // Check if JPG & TIF dimensions match 
-                if (!VerifyMatchingDimensions(_imagePairs[i].TIF, _imagePairs[i].JPG))
-                {
-                    AddStatusUpdate($"{_imagePairs[i].JPG} Not Matching TIF/JPG Dimensions");
-                    continue;  // Skip this file if dimensions don't match
-                }
-                foreach (var item in vMultipageModifyList)
-                {
-                    int x1 = item.Item1;
-                    int y1 = item.Item2;
-                    int x2 = item.Item3;
-                    int y2 = item.Item4;
-                    ConversionSettings _conversionSettings = item.Item5 as ConversionSettings;
-
-                    ThresholdMe(_conversionSettings, x1, y1, x2, y2, _imagePairs[i].JPG, _imagePairs[i].TIF, false, true);
-//                     ThresholdMe(_ConvSetting, left, top, right, bottom, _imagePairs[i].JPG, _imagePairs[i].TIF, false, true);
-
-                }
+                case Keys.F2: return "F2";
+                case Keys.F3: return "F3";
+                case Keys.F4: return "F4";
+                case Keys.F5: return "F5";
+                case Keys.F6: return "F6";
+                default: return key.ToString();
             }
-                // Loop thru each setting, convert that area.         
+        }
+
+        /// <summary>Enter or toggle batch mode (called from [ key or Batch button).</summary>
+        public void BatchModeToggle()
+        {
+            if (vMultipageModifyMode == MultipageModifyMode.Uninitialized)
+            {
+                // First press: enter Every Page mode
+                vMultipageModifyMode = MultipageModifyMode.InitializedEveryPage;
+                _batchHasFullPage = false;
+                UpdateBatchUI();
+                AddStatusUpdate("Batch Mode: Every Page", true);
+            }
+            else if (vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage)
+            {
+                // Second press: toggle to Every Other Page
+                vMultipageModifyMode = MultipageModifyMode.InitializedEveryOtherPage;
+                UpdateBatchUI();
+                AddStatusUpdate("Batch Mode: Every Other Page");
+            }
+            else
+            {
+                // Third press (EveryOtherPage): exit batch mode
+                ExitBatchMode();
+            }
+        }
+
+        /// <summary>Exit batch mode, clear all queued entries and overlays.</summary>
+        private void ExitBatchMode()
+        {
+            vMultipageModifyMode = MultipageModifyMode.Uninitialized;
+            vMultipageModifyList.Clear();
+            _batchHasFullPage = false;
+            keyPicture2.ClearAnnotations();
+            UpdateBatchUI();
+            AddStatusUpdate("Batch mode exited", true);
+        }
+
+        /// <summary>Update Batch/Process button visibility and text on the ThresholdSettings form.</summary>
+        private void UpdateBatchUI()
+        {
+            if (thresholdSettingsForm == null || thresholdSettingsForm.IsDisposed) return;
+
+            bool inBatch = vMultipageModifyMode != MultipageModifyMode.Uninitialized;
+            if (inBatch)
+            {
+                string mode = vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage
+                    ? "Exit ([) EOPage"
+                    : "Exit ([) EPage";
+                thresholdSettingsForm.buBatch.Text = mode;
+                thresholdSettingsForm.buBatchProcess.Visible = true;
+            }
+            else
+            {
+                thresholdSettingsForm.buBatch.Text = "Batch Mode ([)";
+                thresholdSettingsForm.buBatchProcess.Visible = false;
+            }
+        }
+
+        /// <summary>Add a batch entry for the given F-key (area or full-page).</summary>
+        private void BatchAddEntry(Keys pressedKey)
+        {
+            bool IsDynamicOrML(string type) =>
+                type == "Dynamic" || type == "Refine" || type == "ML1" || type == "ML2";
+
+            var settings = GetSettingsForKey(pressedKey);
+            if (settings == null) return;
+
+            if (!IsDynamicOrML(settings.Type))
+            {
+                AddStatusUpdate("Batch mode only works for Dynamic, Refine & ML1/ML2.");
+                return;
+            }
+
+            int _left = keyPicture2.GetSelectedLeft();
+            int _top = keyPicture2.GetSelectedTop();
+            int _right = keyPicture2.GetSelectedRight();
+            int _bottom = keyPicture2.GetSelectedBottom();
+
+            bool hasSelection = (_left != 0 || _top != 0 || _right != 0 || _bottom != 0)
+                                && _left < _right && _top < _bottom;
+
+            if (hasSelection)
+            {
+                // Area mode — dimensions must match for pixel-level overlay
+                if (!VerifyMatchingDimensions(ImagePairs[currentImageIndex].TIF, ImagePairs[currentImageIndex].JPG))
+                {
+                    AddStatusUpdate("TIF/JPG dimensions don't match — skipped");
+                    return;
+                }
+
+                if (_batchHasFullPage)
+                {
+                    AddStatusUpdate("Cannot add area entry — full-page entry already queued. Exit and re-enter batch mode.");
+                    return;
+                }
+
+                vMultipageModifyList.Add(Tuple.Create(_left, _top, _right, _bottom, settings));
+
+                // Add overlay annotation (color-coded by F-key)
+                keyPicture2.SetTransparentRectNoRef(_left, _top, _right, _bottom, FKeyToColor(pressedKey));
+                keyPicture2.SetTransparentRectNoRef_Refresh();
+
+                // Convert the area on the current image immediately so user sees the result
+                ThresholdMe(settings, _left, _top, _right, _bottom,
+                    ImagePairs[currentImageIndex].JPG, ImagePairs[currentImageIndex].TIF, false, true);
+                RefreshDisplayImage();
+
+                int count = vMultipageModifyList.Count;
+                AddStatusUpdate($"Batch: {count} region{(count == 1 ? "" : "s")} queued ({FKeyLabel(pressedKey)})");
+                ClearSelection();
+            }
+            else
+            {
+                // Full-page mode (no selection)
+                if (vMultipageModifyList.Count > 0 && !_batchHasFullPage)
+                {
+                    AddStatusUpdate("Cannot add full-page entry — area entries already queued. Exit and re-enter batch mode.");
+                    return;
+                }
+
+                // Replace any existing full-page entry
+                if (_batchHasFullPage)
+                {
+                    vMultipageModifyList.Clear();
+                    keyPicture2.ClearAnnotations();
+                }
+
+                // Full-page: store with coords (0,0,0,0)
+                vMultipageModifyList.Add(Tuple.Create(0, 0, 0, 0, settings));
+                _batchHasFullPage = true;
+
+                // Convert the full current image immediately so user sees the result
+                ThresholdMe(settings, 0, 0, 0, 0,
+                    ImagePairs[currentImageIndex].JPG, ImagePairs[currentImageIndex].TIF, false, true);
+                RefreshDisplayImage();
+
+                AddStatusUpdate($"Batch: Full page ({FKeyLabel(pressedKey)} settings)");
+            }
+        }
+
+        /// <summary>Process all queued batch entries.</summary>
+        public void BatchProcess()
+        {
+            if (vMultipageModifyMode == MultipageModifyMode.Uninitialized)
+            {
+                AddStatusUpdate("Not in batch mode.");
+                return;
+            }
+
+            if (vMultipageModifyList.Count == 0)
+            {
+                AddStatusUpdate("No modifications to apply.");
+                return;
+            }
+
+            bool hasML = false;
+            bool hasDynamic = false;
+
+            foreach (var item in vMultipageModifyList)
+            {
+                string type = item.Item5.Type;
+                if (type == "ML1" || type == "ML2")
+                    hasML = true;
+                if (type == "Dynamic" || type == "Refine")
+                    hasDynamic = true;
+            }
+
+            if (hasDynamic && hasML)
+            {
+                AddStatusUpdate("Can't mix Dynamic/Refine with ML1/ML2 in one batch.");
+                return;
+            }
+            else if (hasDynamic)
+            {
+                MultipageModifyAlt_Dynamic();
+            }
+            else if (hasML)
+            {
+                BatchConvert_ML();
+            }
+
+            // Clean up batch state
+            vMultipageModifyMode = MultipageModifyMode.Uninitialized;
+            vMultipageModifyList.Clear();
+            _batchHasFullPage = false;
+            keyPicture2.ClearAnnotations();
+            UpdateBatchUI();
+            AddStatusUpdate("Batch complete", true);
+            RefreshDisplayImage();
+        }
+
+        /// <summary>Route [ and ] keys plus F-key presses during batch mode.</summary>
+        private void MultipageModifyAlt(Keys pressedKey)
+        {
+            if (pressedKey == Keys.OemOpenBrackets)
+            {
+                BatchModeToggle();
+                return;
+            }
+
+            if (pressedKey == Keys.OemCloseBrackets)
+            {
+                BatchProcess();
+                return;
+            }
+
+            // F-key pressed while in batch mode
+            if ((vMultipageModifyMode == MultipageModifyMode.InitializedEveryPage
+                 || vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage)
+                && (pressedKey == Keys.F2 || pressedKey == Keys.F3 || pressedKey == Keys.F4
+                    || pressedKey == Keys.F5 || pressedKey == Keys.F6))
+            {
+                BatchAddEntry(pressedKey);
+            }
+        }
+
+
+        private void BatchConvert_ML()
+        {
+            if (_batchConvertRunning)
+            {
+                AddStatusUpdate("Batch conversion already in progress.");
+                return;
+            }
+            _batchConvertRunning = true;
+
+            // Snapshot data before going async
+            var imagePairs = this.ImagePairs.ToList();
+            int startIndex = currentImageIndex;
+            int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
+            var modifyList = vMultipageModifyList
+                .Select(t =>
+                {
+                    var copy = new ConversionSettings();
+                    copy.CopyValuesFrom(t.Item5);
+                    return (x1: t.Item1, y1: t.Item2, x2: t.Item3, y2: t.Item4, settings: copy);
+                })
+                .ToList();
+
+            // Full-page entries don't need dimension checks (they convert JPG and overwrite TIF)
+            bool hasAreaEntries = modifyList.Any(m => m.x1 < m.x2 && m.y1 < m.y2);
+
+            // Current image was already converted in BatchAddEntry, start from next
+            int totalImages = 0;
+            for (int i = startIndex + increment; i < imagePairs.Count; i += increment) totalImages++;
+
+            if (totalImages == 0)
+            {
+                AddStatusUpdate("ML batch complete: 1 image converted.");
+                return;
+            }
+
+            _batchConvertRunning = true;
+            AddStatusUpdate($"ML batch: processing remaining {totalImages} images...");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            Task.Run(() =>
+            {
+                int completed = 0;
+                int skipped = 0;
+
+                for (int i = startIndex + increment; i < imagePairs.Count; i += increment)
+                {
+                    try
+                    {
+                        // Only check dimensions for area entries (pixel overlay needs 1:1 match)
+                        if (hasAreaEntries)
+                        {
+                            int jpgW = 0, jpgH = 0, tifW = 0, tifH = 0;
+                            RavenImaging.GetImageInfo(imagePairs[i].JPG, 1, ref jpgW, ref jpgH);
+                            RavenImaging.GetImageInfo(imagePairs[i].TIF, 1, ref tifW, ref tifH);
+                            if (jpgW != tifW || jpgH != tifH)
+                            {
+                                skipped++;
+                                this.BeginInvoke(new Action(() =>
+                                    AddStatusUpdate($"Skipped: {Path.GetFileName(imagePairs[i].JPG)} — dimensions don't match")));
+                                continue;
+                            }
+                        }
+
+                        // ThresholdMe must run on UI thread (uses handle-based GDI+ API)
+                        foreach (var item in modifyList)
+                        {
+                            this.Invoke(new Action(() =>
+                                ThresholdMe(item.settings, item.x1, item.y1, item.x2, item.y2,
+                                    imagePairs[i].JPG, imagePairs[i].TIF, false, true)));
+                        }
+
+                        completed++;
+                        if (completed % 100 == 0 || completed == totalImages)
+                        {
+                            this.BeginInvoke(new Action(() =>
+                                AddStatusUpdate($"ML batch: {completed}/{totalImages}...")));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        skipped++;
+                        System.Diagnostics.Debug.WriteLine($"ML batch error: {ex.Message}");
+                    }
+                }
+
+                sw.Stop();
+                this.BeginInvoke(new Action(() =>
+                {
+                    AddStatusUpdate($"ML batch complete: {completed + 1} converted, {skipped} skipped in {sw.Elapsed.TotalSeconds:F1}s", true);
+                    _batchConvertRunning = false;
+                }));
+            });
         }
 
         // Flag to prevent overlapping batch conversions
         private volatile bool _batchConvertRunning = false;
 
         /// <summary>
-        /// Multi-threaded batch conversion for Dynamic/RDynamic/Refine types.
+        /// Multi-threaded batch conversion for Dynamic/Refine types.
         /// Processes all remaining images from currentImageIndex using the byte-array
         /// pipeline directly (thread-safe, no shared static cache or handle API).
         /// Runs in the background so the UI stays responsive.
@@ -1477,9 +1683,15 @@ namespace RAVEN
                 return;
             }
 
-            // Snapshot everything we need before going async
+            // Snapshot everything we need before going async (deep-copy settings
+            // so the user can change presets mid-batch without affecting in-flight work)
             var modifyList = vMultipageModifyList
-                .Select(t => (x1: t.Item1, y1: t.Item2, x2: t.Item3, y2: t.Item4, settings: t.Item5))
+                .Select(t =>
+                {
+                    var copy = new ConversionSettings();
+                    copy.CopyValuesFrom(t.Item5);
+                    return (x1: t.Item1, y1: t.Item2, x2: t.Item3, y2: t.Item4, settings: copy);
+                })
                 .ToList();
 
             // Separate full-page entries (coords <= 0) from area entries (positive coords)
@@ -1496,28 +1708,29 @@ namespace RAVEN
             // Check if any full-page entry uses the photostat pipeline
             bool anyPhotostat = fullPageEntries.Any(fp =>
                 fp.settings.NegativeImage &&
-                (fp.settings.Type == "RDynamic" || fp.settings.Type == "Dynamic"));
+                fp.settings.Type == "Dynamic");
 
             var imagePairs = this.ImagePairs;
             int startIndex = this.currentImageIndex;
             int increment = (this.vMultipageModifyMode == MultipageModifyMode.InitializedEveryOtherPage) ? 2 : 1;
 
-            var indices = new List<int>();
-            for (int i = startIndex; i < imagePairs.Count; i += increment)
-                indices.Add(i);
+            // Current image was already converted in BatchAddEntry, start from next
+            var remainingIndices = new List<int>();
+            for (int i = startIndex + increment; i < imagePairs.Count; i += increment)
+                remainingIndices.Add(i);
 
-            if (indices.Count == 0)
+            if (remainingIndices.Count == 0)
             {
-                AddStatusUpdate("No images to process.");
+                AddStatusUpdate("Batch complete: 1 image converted.");
                 vMultipageModifyList.Clear();
                 return;
             }
 
-            int totalImages = indices.Count;
+            int totalImages = remainingIndices.Count;
             int maxParallelism = Math.Max(1, Environment.ProcessorCount - 2);
 
             _batchConvertRunning = true;
-            AddStatusUpdate($"Batch converting {totalImages} images ({maxParallelism} threads)...");
+            AddStatusUpdate($"Batch converting remaining {totalImages} images ({maxParallelism} threads)...");
 
             // Ensure any pending single-image save completes before batch starts
             OpenThresholdBridge.WaitForPendingSave();
@@ -1535,21 +1748,29 @@ namespace RAVEN
                 {
                     var options = new ParallelOptions { MaxDegreeOfParallelism = maxParallelism };
 
-                    Parallel.ForEach(indices, options, imageIndex =>
+                    // Full-page entries don't need dimension checks (they convert JPG and overwrite TIF)
+                    bool hasAreaEntries = areaEntries.Count > 0;
+
+                    Parallel.ForEach(remainingIndices, options, imageIndex =>
                     {
                         string jpgPath = imagePairs[imageIndex].JPG;
                         string tifPath = imagePairs[imageIndex].TIF;
 
                         try
                         {
-                            // Verify dimensions match (reads file headers only, thread-safe)
-                            int jpgW = 0, jpgH = 0, tifW = 0, tifH = 0;
-                            RavenImaging.GetImageInfo(jpgPath, 1, ref jpgW, ref jpgH);
-                            RavenImaging.GetImageInfo(tifPath, 1, ref tifW, ref tifH);
-                            if (jpgW != tifW || jpgH != tifH)
+                            // Only check dimensions for area entries (pixel overlay needs 1:1 match)
+                            if (hasAreaEntries)
                             {
-                                Interlocked.Increment(ref skippedCount);
-                                return;
+                                int jpgW = 0, jpgH = 0, tifW = 0, tifH = 0;
+                                RavenImaging.GetImageInfo(jpgPath, 1, ref jpgW, ref jpgH);
+                                RavenImaging.GetImageInfo(tifPath, 1, ref tifW, ref tifH);
+                                if (jpgW != tifW || jpgH != tifH)
+                                {
+                                    Interlocked.Increment(ref skippedCount);
+                                    this.BeginInvoke(new Action(() =>
+                                        AddStatusUpdate($"Skipped: {Path.GetFileName(jpgPath)} — TIF/JPG dimensions don't match")));
+                                    return;
+                                }
                             }
 
                             // Decode JPEG to grayscale byte arrays (thread-local, no shared state)
@@ -1598,7 +1819,7 @@ namespace RAVEN
 
                                 byte[] binary;
 
-                                if (negative && (fp.settings.Type == "RDynamic" || fp.settings.Type == "Dynamic"))
+                                if (negative && fp.settings.Type == "Dynamic")
                                 {
                                     // Full photostat pipeline with border detection + bleed-through
                                     binary = BatchConvertPhotostatFull(bgr, bgrStride,
@@ -1722,7 +1943,7 @@ namespace RAVEN
                             }
 
                             int done = Interlocked.Increment(ref completedCount);
-                            if (done % 5 == 0 || done == totalImages)
+                            if (done % 100 == 0 || done == totalImages)
                             {
                                 this.BeginInvoke(new Action(() =>
                                     AddStatusUpdate($"Batch converting... {done}/{totalImages}")));
@@ -1817,6 +2038,7 @@ namespace RAVEN
                     cRight  = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 1, 80.0, 30);
                     cBottom = RavenImaging.FindBlackBorderDirect(bCropPacked, bCropByteW, bW, bH, 1, 3, 80.0, 100);
                     contentW = cRight - cLeft + 1; contentH = cBottom - cTop + 1;
+                    if (contentW <= 0 || contentH <= 0) { borderFailed = true; return; }
                 },
                 () =>
                 {
@@ -1826,7 +2048,36 @@ namespace RAVEN
             );
 
             if (borderFailed)
-                return new byte[W * H]; // White image on border detection failure
+            {
+                // Border detection failed — convert the full inverted image instead
+                int nT = Environment.ProcessorCount;
+                int rpt = (H + nT - 1) / nT;
+                Parallel.For(0, nT, t =>
+                {
+                    int sy = t * rpt;
+                    int ey = Math.Min(sy + rpt, H);
+                    if (sy < ey)
+                        RavenImaging.RemoveBleedThroughApplyRows(bgrCopy, W, H, bgrStride, 1,
+                            btBgH, btBgS, btBgL, sy, ey);
+                });
+
+                byte[] grayInv = RavenImaging.ExtractGrayscaleFromBgr(bgrCopy, bgrStride,
+                    0, 0, W - 1, H - 1, invert: true);
+
+                byte[] result = RavenImaging.DynamicThresholdApply(grayInv, W, H,
+                    7, 7, contrast, brightness);
+                byte[] packed = RavenImaging.PackTo1bpp(result, W, H);
+                int byteW = (W + 7) / 8;
+                if (despeckle > 0)
+                    RavenImaging.DespeckleApply(packed, byteW, W, H, despeckle, despeckle);
+                RavenImaging.RemoveBlackWiresDirect(packed, byteW, W, H);
+                int PhHeight = H - 10;
+                int PhRatio = PhHeight / 5;
+                int phBreaks = PhHeight - 15000;
+                RavenImaging.RemoveVerticalLinesDirect(packed, byteW, W, H, PhHeight, phBreaks, PhRatio);
+                RavenImaging.UnpackFrom1bpp(packed, result, W, H);
+                return result;
+            }
 
             // Phase 2: Bleed-through removal (modifies bgrCopy in-place, row-parallel)
             int nThreads = Environment.ProcessorCount;
@@ -2754,7 +3005,7 @@ namespace RAVEN
                     int tolerance = 0;
                     bool negative = false;
 
-                    if (_ConversionSettings.Type == "Dynamic" || _ConversionSettings.Type == "RDynamic")
+                    if (_ConversionSettings.Type == "Dynamic")
                     {
                         refinethreshold = false;
                         contrast = _ConversionSettings.Contrast;
@@ -2796,7 +3047,7 @@ namespace RAVEN
                         {
                             DisplayImages(jpgImage, jpgImage.ToLower().Replace(".jpg", ".tif"), 0, true);
                         }
-                        else if (_ConversionSettings?.Type == "RDynamic" || _ConversionSettings?.Type == "Refine"
+                        else if (_ConversionSettings?.Type == "Dynamic" || _ConversionSettings?.Type == "Refine"
                             ? OpenThresholdBridge.TryGetDisplayPixels(out byte[] tifPixels, out int tifW, out int tifH)
                             : false)
                         {
@@ -3558,11 +3809,11 @@ namespace RAVEN
             string TempPartialTifFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thresholded_Partial.tif");
 
 
-            // Fast path: full non-negative conversion for RDynamic/Dynamic/Refine
+            // Fast path: full non-negative conversion for Dynamic/Refine
             // Skips ImgOpen/ImgDuplicate — the byte-array pipeline doesn't need GDI+ handles
             if (X1 <= 0 && Y1 <= 0 && X2 <= 0 && Y2 <= 0
                 && !NegativeImage && !SBB
-                && (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine"))
+                && (conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine"))
             {
                 CreateCheckpoint(outputTIF);
                 int dynDespeckle = despeckle;
@@ -3575,11 +3826,11 @@ namespace RAVEN
                 return;
             }
 
-            // Fast path: full photostat (negative) conversion for RDynamic/Dynamic
+            // Fast path: full photostat (negative) conversion for Dynamic
             // Byte-array pipeline with parallel AT — no GDI+ handles
             if (X1 <= 0 && Y1 <= 0 && X2 <= 0 && Y2 <= 0
                 && NegativeImage && !SBB
-                && (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic"))
+                && conversionSettings?.Type == "Dynamic")
             {
                 CreateCheckpoint(outputTIF);
                 OpenThresholdBridge.ApplyThresholdToFilePhotostat(inputJPG, outputTIF, 7, 7, contrast, brightness, despeckle);
@@ -3627,123 +3878,14 @@ namespace RAVEN
                 tImageHandle = RavenImaging.ImgDuplicate(ImageHandle);
 
                 // Full + Photostat + Non SBB Thresholding
+                // Dynamic photostats are handled by the fast path above.
+                // Only Refine can reach here, which is not supported for full photostat.
                 if (NegativeImage == true && SBB == false)
                 {
-                    StatusUpdate("Photostat Threshold - please wait ... ");
-
-                    // Refine threshold not supported for full photostat conversions (same as IET)
-                    if (conversionSettings?.Type == "Refine")
-                    {
-                        MessageBox.Show("Refine Threshold is not supported for full photostat conversions.");
-                        if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
-                        if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
-                        return;
-                    }
-
-                    int CopyOfImage = RavenImaging.ImgDuplicate(tImageHandle);
-                    
-                    RavenImaging.ImgAutoThreshold(CopyOfImage, 2);
-
-                    // Round A: single LockBits+Copy for all 4 border calls
-                    var aRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
-                        new[] { (0, 90.0, 1), (2, 90.0, 1), (1, 90.0, 1), (3, 90.0, 1) });
-                    int aLeft = aRes[0]; int aTop = aRes[1]; int aRight = aRes[2]; int aBottom = aRes[3];
-
-                    if ((aLeft <= aRight) && (aTop <= aBottom))
-                    {
-                        RavenImaging.ImgCropBorder(CopyOfImage, aLeft, aTop, aRight, aBottom);
-
-                        //Copy of image has black interior photostat bitonal - we will invert this.
-                        RavenImaging.ImgInvert(CopyOfImage);
-
-                        // Round B: single LockBits+Copy for all 4 border calls
-                        var bRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
-                            new[] { (0, 99.0, 1), (2, 99.0, 1), (1, 99.0, 1), (3, 99.0, 1) });
-                        int bLeft = bRes[0]; int bTop = bRes[1]; int bRight = bRes[2]; int bBottom = bRes[3];
-
-                        bLeft = bLeft + 20;
-                        bRight = bRight - 20;
-
-                        if (bLeft <= bRight && bTop <= bBottom)
-                        {
-                            RavenImaging.ImgCropBorder(CopyOfImage, bLeft, bTop, bRight, bBottom);
-
-                            // Round C: single LockBits+Copy for all 4 border calls
-                            var cRes = RavenImaging.ImgFindBlackBorderBatch(CopyOfImage,
-                                new[] { (0, 80.0, 30), (2, 80.0, 100), (1, 80.0, 30), (3, 80.0, 100) });
-                            int cLeft = cRes[0]; int cTop = cRes[1]; int cRight = cRes[2]; int cBottom = cRes[3];
-
-                            RavenImaging.ImgDelete(CopyOfImage);
-
-                            RavenImaging.ImgRemoveBleedThrough(tImageHandle, 1);
-
-                            int Copy1 = 0;
-                            int Copy2 = 0;
-
-                            if (aLeft <= aRight && aTop <= aBottom)
-                            {
-                                Copy1 = RavenImaging.ImgCopy(tImageHandle, aLeft, aTop, aRight, aBottom);
-                            }
-
-                            //Remove border of the paper itself that is clean
-                            if (bLeft <= bRight && bTop <= bBottom && Copy1 > 0)
-                            {
-                                Copy2 = RavenImaging.ImgCopy(Copy1, bLeft, bTop, bRight, bBottom);
-
-                            }
-
-                            //Get real image
-                            int Photostat = RavenImaging.ImgCopy(Copy2, cLeft, cTop, cRight, cBottom);
-
-                            RavenImaging.ImgInvert(Photostat);
-
-                            // Refine threshold supported. 
-
-                            if (RefineThreshold == true)
-                            {
-                                MessageBox.Show("Refine Threshold not supported for full image conversions.");                              
-                            }
-                            else
-                            {
-                                var sw = System.Diagnostics.Stopwatch.StartNew();
-                                if (conversionSettings?.Type == "RDynamic")
-                                    Photostat = OpenThresholdBridge.ApplyThreshold(Photostat, 7, 7, contrast, brightness);
-                                else
-                                    RavenImaging.ImgDynamicThresholdAverage(Photostat, 7, 7, contrast, brightness);
-                                sw.Stop();
-                                StatusUpdate($" | Threshold: {sw.ElapsedMilliseconds}ms ({conversionSettings?.Type})");
-                            }
-
-                            if (despeckle > 0 && RefineThreshold == false)
-                            {
-                                RavenImaging.ImgDespeckle(Photostat, despeckle, despeckle);
-                            }
-
-                            RavenImaging.ImgRemoveBlackWires(Photostat);
-
-                            int PhHeight = RavenImaging.ImgGetHeight(Photostat) - 10;
-                            int PhRatio = PhHeight / 5;
-                            int phBreaks = PhHeight - 15000;
-
-                            RavenImaging.ImgRemoveVerticalLines(Photostat, PhHeight, phBreaks, PhRatio, false, true);
-
-                            RavenImaging.ImgAdaptiveThresholdAverage(tImageHandle, 7, 7, -1, -1);
-                            RavenImaging.ImgAdaptiveThresholdAverage(Copy1, 7, 7, 40, 230);
-                            RavenImaging.ImgAdaptiveThresholdAverage(Copy2, 7, 7, 40, 230);
-
-                            // Put photostat back in 
-
-                            RavenImaging.ImgAddCopy(Copy2, Photostat, cLeft, cTop);
-                            RavenImaging.ImgAddCopy(Copy1, Copy2, bLeft, bTop);
-                            RavenImaging.ImgAddCopy(tImageHandle, Copy1, aLeft, aTop);
-
-                            RavenImaging.ImgDelete(Photostat);
-                            RavenImaging.ImgDelete(Copy2);
-                            RavenImaging.ImgDelete(Copy1);
-
-                            StatusUpdate();
-                        }
-                    }
+                    MessageBox.Show("Refine Threshold is not supported for full photostat conversions.");
+                    if (tImageHandle != 0) { RavenImaging.ImgDelete(tImageHandle); tImageHandle = 0; }
+                    if (TifHandle    != 0) { RavenImaging.ImgDelete(TifHandle);    TifHandle    = 0; }
+                    return;
                 }
 
                 // Set Tif handle which will get saved as the thresholded image handle.
@@ -3782,7 +3924,7 @@ namespace RAVEN
                 // Verify dimensions match
                 if (!VerifyMatchingDimensions(outputTIF, inputJPG) || IsFineRotated(outputTIF))
                 {
-                    MessageBox.Show("JPG & TIF Image Dimensions don't match!");
+                    AddStatusUpdate("JPG & TIF dimensions don't match — skipped");
                     ClearJPGCache();
                     RavenImaging.ImgDelete(TifHandle);
 
@@ -3791,8 +3933,8 @@ namespace RAVEN
                 // Create Checkpoin
                 CreateCheckpoint(outputTIF);
 
-                // Pure C# partial path — read JPG, crop, threshold, write TIF directly (RDynamic + Dynamic + Refine)
-                if (conversionSettings?.Type == "RDynamic" || conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine")
+                // Pure C# partial path — read JPG, crop, threshold, write TIF directly (Dynamic + Refine)
+                if (conversionSettings?.Type == "Dynamic" || conversionSettings?.Type == "Refine")
                 {
                     if (NegativeImage)
                         OpenThresholdBridge.ApplyThresholdToFilePartialNegative(inputJPG, outputTIF,
@@ -4075,7 +4217,7 @@ namespace RAVEN
         }
 
         // Preload current image's JPEG into grayscale bytes in the background
-        // so RDynamic threshold doesn't have to wait for the disk read.
+        // so Dynamic threshold doesn't have to wait for the disk read.
         private void PreloadForOpenThreshold()
         {
             if (currentImageIndex >= 0 && currentImageIndex < ImagePairs.Count)
@@ -4315,7 +4457,7 @@ namespace RAVEN
         {
             foreach (int xCoordinate in LineRemovalList)
             {
-                keyPicture2.RemoveDirtyLine(TifImage, 1, TifImage, 3, xCoordinate);
+                RavenImaging.RemoveDirtyLine(TifImage, 1, TifImage, 3, xCoordinate);
             }
         }
 
